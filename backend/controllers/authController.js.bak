@@ -35,22 +35,23 @@ exports.register = async (req, res, next) => {
 
 exports.login = async (req, res, next) => {
   try {
-    console.log('[CONTROLLER] Rozpoczęcie procesu logowania');
-    console.log('[CONTROLLER] Dane z żądania:', req.body);
-    
+    console.log('DEBUG: Rozpoczęcie logowania');
+    console.log('DEBUG: Dane logowania:', { 
+      email: req.body.email, 
+      hasPassword: !!req.body.password 
+    });
+
     const { email, password } = req.body;
-    
-    if (!email || !password) {
-      console.log('[CONTROLLER] ❌ Brak email lub hasła');
-      return next(new AppError('Email i hasło są wymagane', 400));
-    }
 
     try {
-      console.log('[CONTROLLER] Wywołanie authService.login...');
+      console.log('DEBUG: Wywołanie authService.login');
       const result = await authService.login(email, password);
-      console.log('[CONTROLLER] ✅ Logowanie zakończone sukcesem');
+      console.log('DEBUG: Otrzymano wynik z authService.login');
       
-      return res.status(200).json({
+      // Zaloguj odpowiedź bez wrażliwych danych
+      console.log('DEBUG: Sukces logowania, zwracam użytkownika i token');
+      
+      res.status(200).json({
         status: 'success',
         data: {
           user: result.user,
@@ -59,12 +60,12 @@ exports.login = async (req, res, next) => {
         }
       });
     } catch (serviceError) {
-      console.log('[CONTROLLER] ❌ Błąd z authService:', serviceError.message);
-      return next(new AppError('Nieprawidłowe dane logowania', 401));
+      console.log('DEBUG: Błąd z authService:', serviceError.message);
+      throw serviceError;
     }
   } catch (error) {
-    console.log('[CONTROLLER] ⚠️ Nieoczekiwany błąd:', error.message);
-    return next(new AppError('Wystąpił błąd podczas logowania', 500));
+    console.log('DEBUG: Końcowy błąd w kontrolerze:', error.message);
+    next(new AppError('Nieprawidłowe dane logowania', 401));
   }
 };
 
@@ -80,6 +81,7 @@ exports.getMe = async (req, res, next) => {
       }
     });
   } catch (error) {
-    next(error);
+    console.log("DEBUG CRITICAL: Błąd logowania:", error);
+    next(new AppError("Nieprawidłowe dane logowania", 401));
   }
 };

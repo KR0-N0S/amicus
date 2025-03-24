@@ -18,8 +18,6 @@ class AuthService {
     // Zastąp hasło jawne hashem
     userData.password = hashedPassword;
 
-    // Transakcję możemy dodać w przyszłości, jeśli potrzeba
-
     // Utwórz użytkownika
     const newUser = await userRepository.create(userData);
 
@@ -43,39 +41,69 @@ class AuthService {
   }
 
   async login(email, password) {
-    // Znajdź użytkownika
-    const user = await userRepository.findByEmail(email);
-    if (!user) {
-      throw new Error('Nieprawidłowe dane logowania');
+    console.log('[AUTH] Rozpoczęcie logowania dla:', email);
+    
+    try {
+      // Znajdź użytkownika
+      console.log('[AUTH] Szukanie użytkownika w bazie...');
+      const user = await userRepository.findByEmail(email);
+      
+      if (!user) {
+        console.log('[AUTH] ❌ Użytkownik nie znaleziony');
+        throw new Error('Nieprawidłowe dane logowania');
+      }
+      
+      console.log('[AUTH] ✅ Użytkownik znaleziony, ID:', user.id);
+
+      // Sprawdź hasło
+      console.log('[AUTH] Weryfikacja hasła...');
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      
+      if (!isPasswordValid) {
+        console.log('[AUTH] ❌ Nieprawidłowe hasło');
+        throw new Error('Nieprawidłowe dane logowania');
+      }
+      
+      console.log('[AUTH] ✅ Hasło zweryfikowane poprawnie');
+
+      // Pobierz organizacje użytkownika
+      console.log('[AUTH] Pobieranie organizacji użytkownika...');
+      let organizations = [];
+      try {
+        organizations = await organizationRepository.getUserOrganizations(user.id);
+        console.log('[AUTH] ✅ Pobrano organizacje:', organizations.length);
+      } catch (orgError) {
+        console.log('[AUTH] ⚠️ Błąd podczas pobierania organizacji:', orgError.message);
+        // Kontynuuj mimo błędu organizacji
+        organizations = [];
+      }
+
+      // Generuj token JWT
+      console.log('[AUTH] Generowanie tokenu JWT...');
+      const token = this.generateToken(user.id);
+      console.log('[AUTH] ✅ Token wygenerowany');
+
+      // Usuń hasło z danych użytkownika przed zwróceniem
+      const userToReturn = { ...user };
+      delete userToReturn.password;
+      
+      console.log('[AUTH] 🎉 Logowanie zakończone sukcesem');
+      return {
+        user: userToReturn,
+        organizations,
+        token
+      };
+    } catch (error) {
+      console.log('[AUTH] ❌ Błąd podczas logowania:', error.message);
+      throw error;
     }
-
-    // Sprawdź hasło
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      throw new Error('Nieprawidłowe dane logowania');
-    }
-
-    // Pobierz organizacje użytkownika
-    const organizations = await organizationRepository.getUserOrganizations(user.id);
-
-    // Generuj token JWT
-    const token = this.generateToken(user.id);
-
-    // Usuń hasło z danych użytkownika przed zwróceniem
-    const { password: _, ...userWithoutPassword } = user;
-
-    return {
-      user: userWithoutPassword,
-      organizations,
-      token
-    };
   }
 
   generateToken(userId) {
     return jwt.sign(
       { id: userId },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN }
+      process.env.JWT_SECRET || 'amicus_default_secret',
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
   }
 
@@ -88,8 +116,12 @@ class AuthService {
     // Pobierz organizacje użytkownika
     const organizations = await organizationRepository.getUserOrganizations(userId);
 
+    // Usuń hasło z obiektu użytkownika
+    const userToReturn = { ...user };
+    delete userToReturn.password;
+    
     return {
-      user,
+      user: userToReturn,
       organizations
     };
   }

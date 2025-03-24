@@ -19,7 +19,6 @@ const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 // Inicjalizacja aplikacji Express
 const app = express();
-app.set("trust proxy", 1);  // Zaufaj proxy Nginx
 
 // Konfiguracja Swagger
 const swaggerOptions = {
