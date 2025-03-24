@@ -15,6 +15,7 @@ import DataList from './pages/DataList';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
+import ClientsList from './pages/ClientsList'; // Dodajemy import naszego nowego komponentu
 
 // Styles
 import './assets/css/main.css';
@@ -33,6 +34,7 @@ const App: React.FC = () => {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/data/all" element={<DataList />} />
+              <Route path="/clients" element={<ClientsList />} /> {/* Dodajemy nową trasę dla listy klientów */}
               <Route path="/profile" element={<Profile />} />
               <Route path="/settings" element={<Settings />} />
             </Route>

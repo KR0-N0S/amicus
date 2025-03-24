@@ -1,4 +1,3 @@
-// MainLayout.tsx
 import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
@@ -9,7 +8,7 @@ const MainLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const toggleSidebar = () => setSidebarOpen(prev => !prev);
 
-  // Ustawiamy zmienną CSS --sidebar-width na 250px (otwarty) lub 60px (zwinięty)
+  // Ustawiamy zmienną CSS dla desktop (na telefonie media query nadpisze to)
   const layoutStyle = {
     '--sidebar-width': sidebarOpen ? '250px' : '60px'
   } as React.CSSProperties;
