@@ -27,17 +27,12 @@ interface TopBarProps {
   toggleDarkMode: () => void;
 }
 
-const TopBar: React.FC<TopBarProps> = ({
-  toggleSidebar,
-  sidebarOpen,
-  darkMode,
-  toggleDarkMode,
-}) => {
+const TopBar: React.FC<TopBarProps> = ({ toggleSidebar, sidebarOpen, darkMode, toggleDarkMode }) => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [userMenuOpen, setUserMenuOpen] = useState<boolean>(false);
   const [notificationsOpen, setNotificationsOpen] = useState<boolean>(false);
 
-  // Rzutowanie wyniku useAuth() – dopasuj typ do swojego kontekstu
+  // Rzutowanie wyniku useAuth() – dostosuj do własnego kontekstu
   const { logout, user } = useAuth() as { logout: () => void; user: User | null };
 
   const navigate = useNavigate();
@@ -58,12 +53,12 @@ const TopBar: React.FC<TopBarProps> = ({
   };
 
   const toggleUserMenu = () => {
-    setUserMenuOpen((prev) => !prev);
+    setUserMenuOpen(prev => !prev);
     if (notificationsOpen) setNotificationsOpen(false);
   };
 
   const toggleNotifications = () => {
-    setNotificationsOpen((prev) => !prev);
+    setNotificationsOpen(prev => !prev);
     if (userMenuOpen) setUserMenuOpen(false);
   };
 
@@ -78,7 +73,7 @@ const TopBar: React.FC<TopBarProps> = ({
     <div className="topbar">
       <div className="topbar-left">
         <button className="menu-toggle" onClick={toggleSidebar}>
-          {sidebarOpen ? (<FaChevronLeft /> as JSX.Element) : (<FaBars /> as JSX.Element)}
+          {sidebarOpen ? <FaChevronLeft /> : <FaBars />}
         </button>
 
         <form className="search-form" onSubmit={handleSearch}>
@@ -90,7 +85,7 @@ const TopBar: React.FC<TopBarProps> = ({
               onChange={(e) => setSearchQuery(e.target.value)}
             />
             <button type="submit">
-              <FaSearch /> {/* Jeśli problem występuje, rzuć: {<FaSearch /> as JSX.Element} */}
+              <FaSearch />
             </button>
           </div>
         </form>
@@ -102,12 +97,12 @@ const TopBar: React.FC<TopBarProps> = ({
           onClick={toggleDarkMode}
           title={darkMode ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw'}
         >
-          {darkMode ? (<FaSun /> as JSX.Element) : (<FaMoon /> as JSX.Element)}
+          {darkMode ? <FaSun /> : <FaMoon />}
         </button>
 
         <div className="notification-container" ref={notificationsRef}>
           <button className="icon-button notification-toggle" onClick={toggleNotifications}>
-            <FaBell /> {/* lub: {<FaBell /> as JSX.Element} */}
+            <FaBell />
             {notifications.some((n) => !n.read) && <span className="notification-badge"></span>}
           </button>
 
@@ -117,10 +112,7 @@ const TopBar: React.FC<TopBarProps> = ({
               {notifications.length > 0 ? (
                 <ul>
                   {notifications.map((notification) => (
-                    <li
-                      key={notification.id}
-                      className={notification.read ? 'read' : 'unread'}
-                    >
+                    <li key={notification.id} className={notification.read ? 'read' : 'unread'}>
                       <div className="notification-content">
                         <p>{notification.text}</p>
                         <span className="notification-time">{notification.time}</span>
@@ -138,7 +130,7 @@ const TopBar: React.FC<TopBarProps> = ({
         <div className="user-container" ref={userMenuRef}>
           <button className="user-toggle" onClick={toggleUserMenu}>
             <span className="user-avatar">
-              <FaUser /> {/* lub: {<FaUser /> as JSX.Element} */}
+              <FaUser />
             </span>
             <span className="user-name">{userName}</span>
           </button>

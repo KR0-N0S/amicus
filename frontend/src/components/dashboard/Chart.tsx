@@ -25,7 +25,7 @@ ChartJS.register(
 );
 
 interface ChartProps {
-  data: any; // Możesz rozszerzyć typ, np. zgodnie z dokumentacją Chart.js
+  data: any; // Rozszerz typ według potrzeb (np. ChartData<'line'>)
   title?: string;
   height?: number;
 }
@@ -46,46 +46,26 @@ const Chart: React.FC<ChartProps> = ({ data, title, height = 300 }: ChartProps) 
         ? {
             display: true,
             text: title,
-            font: {
-              size: 16,
-            },
+            font: { size: 16 },
           }
         : undefined,
       tooltip: {
         backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        titleFont: {
-          size: 13,
-        },
-        bodyFont: {
-          size: 12,
-        },
+        titleFont: { size: 13 },
+        bodyFont: { size: 12 },
         padding: 10,
         usePointStyle: true,
       },
     },
     elements: {
-      line: {
-        tension: 0.4,
-      },
-      point: {
-        radius: 4,
-        hoverRadius: 6,
-      },
+      line: { tension: 0.4 },
+      point: { radius: 4, hoverRadius: 6 },
     },
     scales: {
-      x: {
-        grid: {
-          display: false,
-        },
-      },
-      y: {
-        beginAtZero: true,
-        grid: {
-          borderDash: [2],
-        },
-      },
+      x: { grid: { display: false } },
+      y: { beginAtZero: true, grid: { borderDash: [2] } },
     },
-  } as any; // Jeśli dalej pojawiają się błędy typowania opcji, rzutujemy na any
+  } as any; // Rzutujemy na any, by ominąć drobne problemy typowania
 
   return (
     <div className="chart-wrapper" style={{ height }}>

@@ -20,7 +20,7 @@ const Dashboard: React.FC = () => {
     {
       title: 'Aktywne zlecenia',
       value: '145',
-      icon: (<FaClipboardList />) as JSX.Element,
+      icon: <FaClipboardList />,
       trend: 'up',
       trendValue: '12%',
       color: 'primary',
@@ -28,7 +28,7 @@ const Dashboard: React.FC = () => {
     {
       title: 'Zakończone w tym miesiącu',
       value: '83',
-      icon: (<FaCalendarCheck />) as JSX.Element,
+      icon: <FaCalendarCheck />,
       trend: 'up',
       trendValue: '8%',
       color: 'success',
@@ -36,7 +36,7 @@ const Dashboard: React.FC = () => {
     {
       title: 'Średni czas wykonania',
       value: '18 dni',
-      icon: (<FaClock />) as JSX.Element,
+      icon: <FaClock />,
       trend: 'down',
       trendValue: '5%',
       color: 'warning',
@@ -44,7 +44,7 @@ const Dashboard: React.FC = () => {
     {
       title: 'Statystyka efektywności',
       value: '87%',
-      icon: (<FaChartLine />) as JSX.Element,
+      icon: <FaChartLine />,
       trend: 'up',
       trendValue: '3%',
       color: 'danger',

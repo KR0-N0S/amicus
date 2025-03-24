@@ -39,7 +39,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
 
   const toggleSubmenu = (menuKey: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setExpandedMenus((prev) => ({
+    setExpandedMenus(prev => ({
       ...prev,
       [menuKey]: !prev[menuKey],
     }));
@@ -53,12 +53,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
   const menuItems: MenuItem[] = [
     {
       title: 'Panel główny',
-      icon: (<FaHome />) as JSX.Element,
+      icon: <FaHome />,
       path: '/dashboard',
     },
     {
       title: 'Klienci',
-      icon: (<FaUsers />) as JSX.Element,
+      icon: <FaUsers />,
       submenuKey: 'clients',
       submenu: true,
       items: [
@@ -68,7 +68,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
     },
     {
       title: 'Zwierzęta',
-      icon: (<FaPaw />) as JSX.Element,
+      icon: <FaPaw />,
       submenuKey: 'animals',
       submenu: true,
       items: [
@@ -78,7 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
     },
     {
       title: 'Laboratorium',
-      icon: (<FaFlask />) as JSX.Element,
+      icon: <FaFlask />,
       submenuKey: 'lab',
       submenu: true,
       items: [
@@ -89,7 +89,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
     },
     {
       title: 'Dokumentacja Medyczna',
-      icon: (<FaBook />) as JSX.Element,
+      icon: <FaBook />,
       submenuKey: 'medical',
       submenu: true,
       items: [
@@ -99,7 +99,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
     },
     {
       title: 'Inseminacje',
-      icon: (<FaSyringe />) as JSX.Element,
+      icon: <FaSyringe />,
       submenuKey: 'inseminations',
       submenu: true,
       items: [
@@ -111,7 +111,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
     },
     {
       title: 'Leki',
-      icon: (<FaPills />) as JSX.Element,
+      icon: <FaPills />,
       submenuKey: 'medicines',
       submenu: true,
       items: [
@@ -121,7 +121,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
     },
     {
       title: 'Kontrahenci',
-      icon: (<FaBuilding />) as JSX.Element,
+      icon: <FaBuilding />,
       path: '/contractors',
     },
   ];
@@ -129,7 +129,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
   return (
     <div className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
       <div className="sidebar-header">{isOpen && <h2 className="app-logo">AmicusApp</h2>}</div>
-
       <nav className="sidebar-nav">
         <ul>
           {menuItems.map((item, index) => (
@@ -141,24 +140,17 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
               {item.submenu ? (
                 <>
                   <div
-                    className={`menu-item with-submenu ${
-                      expandedMenus[item.submenuKey!] ? 'expanded' : ''
-                    }`}
+                    className={`menu-item with-submenu ${expandedMenus[item.submenuKey!] ? 'expanded' : ''}`}
                     onClick={(e) => toggleSubmenu(item.submenuKey!, e)}
                   >
                     <span className="icon">{item.icon}</span>
                     {isOpen && <span className="title">{item.title}</span>}
                     {isOpen && (
                       <span className="arrow">
-                        {expandedMenus[item.submenuKey!] ? (
-                          <FaChevronUp /> as JSX.Element
-                        ) : (
-                          <FaChevronDown /> as JSX.Element
-                        )}
+                        {expandedMenus[item.submenuKey!] ? <FaChevronUp /> : <FaChevronDown />}
                       </span>
                     )}
                   </div>
-
                   {(expandedMenus[item.submenuKey!] || (!isOpen && hoveredItem === index)) && (
                     <ul className={`submenu ${!isOpen ? 'floating' : ''}`}>
                       {item.items &&
@@ -166,9 +158,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
                           <li key={subIndex} className="submenu-item-container">
                             <NavLink
                               to={subItem.path}
-                              className={({ isActive }) =>
-                                isActive ? 'submenu-item active' : 'submenu-item'
-                              }
+                              className={({ isActive }) => (isActive ? 'submenu-item active' : 'submenu-item')}
                             >
                               {subItem.title}
                             </NavLink>
@@ -178,7 +168,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
                                 onClick={(e) => handleAddNew(subItem.addNew!, e)}
                                 title={`Dodaj nowy ${subItem.title.toLowerCase()}`}
                               >
-                                <FaPlus /> {/* Możesz też użyć: {<FaPlus /> as JSX.Element} */}
+                                <FaPlus />
                               </button>
                             )}
                           </li>

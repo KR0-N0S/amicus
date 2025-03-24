@@ -1,3 +1,4 @@
+/* Reset */
 html, body {
   margin: 0;
   padding: 0;
@@ -5,20 +6,104 @@ html, body {
   overflow-x: hidden;
 }
 
-.app-container {
-  display: flex;
-  height: 100vh;
-  width: 100%;
+/* Ustaw domyślną wartość zmiennej – szerokość sidebara */
+:root {
+  --sidebar-width: 250px;
 }
 
+/* Sidebar – pozycjonowany fixed po lewej stronie */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: var(--sidebar-width);
+  transition: width 0.3s ease;
+  /* Dodatkowe style sidebaru, np. tło, cienie, etc. */
+}
+
+/* Kontener zawartości – przesunięty o szerokość sidebara */
 .content-wrapper {
-  flex: 1;
+  margin-left: var(--sidebar-width);
   display: flex;
   flex-direction: column;
+  transition: margin-left 0.3s ease;
 }
 
+/* Topbar – pozycjonowany fixed, z lewym offsetem równym szerokości sidebara */
+.topbar {
+  position: fixed;
+  top: 0;
+  left: var(--sidebar-width);
+  right: 0;
+  height: 60px;
+  background-color: white;
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: left 0.3s ease;
+  z-index: 900;
+}
+
+/* Główna zawartość – zajmuje całą szerokość rodzica (content-wrapper) */
 .main-content {
   flex: 1;
   padding: 20px;
-  overflow-y: auto;
+  margin-top: 60px; /* aby nie była zakrywana przez topbar */
+  width: 100%;
+  transition: width 0.3s ease;
+}
+
+/* Media query dla mniejszych ekranów – sidebar zwinięty */
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 60px;
+  }
+  
+  .sidebar {
+    width: var(--sidebar-width);
+  }
+  
+  .content-wrapper {
+    margin-left: var(--sidebar-width);
+  }
+  
+  .topbar {
+    left: var(--sidebar-width);
+  }
+}
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 60px;
+  }
+  
+  .sidebar {
+    width: var(--sidebar-width);
+  }
+  
+  .content-wrapper {
+    margin-left: var(--sidebar-width);
+  }
+  
+  .topbar {
+    left: var(--sidebar-width);
+  }
+}
+
+/* Media query dla telefonów (max-width: 576px) - ukrywamy sidebar */
+@media (max-width: 576px) {
+  :root {
+    --sidebar-width: 0;
+  }
+  
+  .sidebar {
+    display: none;
+  }
+  
+  .content-wrapper {
+    margin-left: 0;
+  }
+  
+  .topbar {
+    left: 0;
+  }
 }
