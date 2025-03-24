@@ -4,9 +4,9 @@ import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import './MainLayout.css';
 
-const MainLayout = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
+const MainLayout: React.FC = () => {
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
+  const [darkMode, setDarkMode] = useState<boolean>(false);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -21,7 +21,7 @@ const MainLayout = () => {
     <div className={`app-container ${darkMode ? 'dark-theme' : 'light-theme'}`}>
       <Sidebar isOpen={sidebarOpen} />
       
-      <div className={`main-content ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
+      <div className="main-content">
         <TopBar 
           toggleSidebar={toggleSidebar} 
           sidebarOpen={sidebarOpen}

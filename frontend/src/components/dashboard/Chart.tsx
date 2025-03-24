@@ -24,25 +24,33 @@ ChartJS.register(
   Filler
 );
 
-const Chart = ({ data, title, height = 300 }) => {
+interface ChartProps {
+  data: any; // Możesz rozszerzyć typ, np. zgodnie z dokumentacją Chart.js
+  title?: string;
+  height?: number;
+}
+
+const Chart: React.FC<ChartProps> = ({ data, title, height = 300 }: ChartProps) => {
   const options = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: {
-        position: 'top',
+        position: 'top' as const,
         labels: {
           usePointStyle: true,
           boxWidth: 6,
         },
       },
-      title: title ? {
-        display: true,
-        text: title,
-        font: {
-          size: 16,
-        },
-      } : undefined,
+      title: title
+        ? {
+            display: true,
+            text: title,
+            font: {
+              size: 16,
+            },
+          }
+        : undefined,
       tooltip: {
         backgroundColor: 'rgba(0, 0, 0, 0.7)',
         titleFont: {
@@ -77,7 +85,7 @@ const Chart = ({ data, title, height = 300 }) => {
         },
       },
     },
-  };
+  } as any; // Jeśli dalej pojawiają się błędy typowania opcji, rzutujemy na any
 
   return (
     <div className="chart-wrapper" style={{ height }}>

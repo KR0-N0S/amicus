@@ -1,37 +1,31 @@
 import React, { useState } from 'react';
-import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import './MainLayout.css';
 
-const MainLayout: React.FC = () => {
+interface MainLayoutProps {
+  children?: React.ReactNode;
+}
+
+const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
-  const [darkMode, setDarkMode] = useState<boolean>(false);
 
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
+  const toggleSidebar = () => setSidebarOpen(prev => !prev);
 
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-    document.documentElement.classList.toggle('dark-mode');
-  };
-  
   return (
-    <div className={`app-container ${darkMode ? 'dark-theme' : 'light-theme'}`}>
+    <div className="app-container">
+      {/* Sidebar jako element flex */}
       <Sidebar isOpen={sidebarOpen} />
-      
-      <div className="main-content">
-        <TopBar 
-          toggleSidebar={toggleSidebar} 
+      <div className="content-wrapper">
+        <TopBar
+          toggleSidebar={toggleSidebar}
           sidebarOpen={sidebarOpen}
-          darkMode={darkMode}
-          toggleDarkMode={toggleDarkMode}
+          darkMode={false} // lub pobieraj stan darkMode z kontekstu
+          toggleDarkMode={() => {}}
         />
-        
-        <div className="content-area">
-          <Outlet />
-        </div>
+        <main className="main-content">
+          {children}
+        </main>
       </div>
     </div>
   );

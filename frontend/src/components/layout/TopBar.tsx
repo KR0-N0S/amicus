@@ -1,29 +1,54 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  FaBars, FaChevronLeft, FaSearch, FaBell, FaUser, 
-  FaMoon, FaSun, FaSignOutAlt, FaCog 
+import {
+  FaBars,
+  FaChevronLeft,
+  FaSearch,
+  FaBell,
+  FaUser,
+  FaMoon,
+  FaSun,
+  FaSignOutAlt,
+  FaCog,
 } from 'react-icons/fa';
 import useOutsideClick from '../../hooks/useOutsideClick';
 import './TopBar.css';
 import { useAuth } from '../../context/AuthContext';
 
-const TopBar = ({ toggleSidebar, sidebarOpen, darkMode, toggleDarkMode }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const { logout, user } = useAuth();
-  
+interface User {
+  first_name?: string;
+  email?: string;
+}
+
+interface TopBarProps {
+  toggleSidebar: () => void;
+  sidebarOpen: boolean;
+  darkMode: boolean;
+  toggleDarkMode: () => void;
+}
+
+const TopBar: React.FC<TopBarProps> = ({
+  toggleSidebar,
+  sidebarOpen,
+  darkMode,
+  toggleDarkMode,
+}) => {
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [userMenuOpen, setUserMenuOpen] = useState<boolean>(false);
+  const [notificationsOpen, setNotificationsOpen] = useState<boolean>(false);
+
+  // Rzutowanie wyniku useAuth() – dopasuj typ do swojego kontekstu
+  const { logout, user } = useAuth() as { logout: () => void; user: User | null };
+
   const navigate = useNavigate();
-  const userMenuRef = useRef(null);
-  const notificationsRef = useRef(null);
-  
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
+
   useOutsideClick(userMenuRef, () => setUserMenuOpen(false));
   useOutsideClick(notificationsRef, () => setNotificationsOpen(false));
-  
-  const handleSearch = (e) => {
+
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    // Implementacja wyszukiwania
     console.log('Searching for:', searchQuery);
   };
 
@@ -33,30 +58,29 @@ const TopBar = ({ toggleSidebar, sidebarOpen, darkMode, toggleDarkMode }) => {
   };
 
   const toggleUserMenu = () => {
-    setUserMenuOpen(!userMenuOpen);
+    setUserMenuOpen((prev) => !prev);
     if (notificationsOpen) setNotificationsOpen(false);
   };
 
   const toggleNotifications = () => {
-    setNotificationsOpen(!notificationsOpen);
+    setNotificationsOpen((prev) => !prev);
     if (userMenuOpen) setUserMenuOpen(false);
   };
-  
-  // Przykładowe powiadomienia
+
   const notifications = [
     { id: 1, text: 'Nowe powiadomienie', time: '5 min temu', read: false },
     { id: 2, text: 'Aktualizacja systemu', time: '1 godz. temu', read: true },
   ];
 
-  const userName = user ? user.first_name || user.email : 'Użytkownik';
+  const userName = user ? (user.first_name || user.email) : 'Użytkownik';
 
   return (
     <div className="topbar">
       <div className="topbar-left">
         <button className="menu-toggle" onClick={toggleSidebar}>
-          {sidebarOpen ? <FaChevronLeft /> : <FaBars />}
+          {sidebarOpen ? (<FaChevronLeft /> as JSX.Element) : (<FaBars /> as JSX.Element)}
         </button>
-        
+
         <form className="search-form" onSubmit={handleSearch}>
           <div className="search-container">
             <input
@@ -66,38 +90,35 @@ const TopBar = ({ toggleSidebar, sidebarOpen, darkMode, toggleDarkMode }) => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
             <button type="submit">
-              <FaSearch />
+              <FaSearch /> {/* Jeśli problem występuje, rzuć: {<FaSearch /> as JSX.Element} */}
             </button>
           </div>
         </form>
       </div>
-      
+
       <div className="topbar-right">
-        <button 
-          className="icon-button theme-toggle" 
+        <button
+          className="icon-button theme-toggle"
           onClick={toggleDarkMode}
-          title={darkMode ? "Przełącz na jasny motyw" : "Przełącz na ciemny motyw"}
+          title={darkMode ? 'Przełącz na jasny motyw' : 'Przełącz na ciemny motyw'}
         >
-          {darkMode ? <FaSun /> : <FaMoon />}
+          {darkMode ? (<FaSun /> as JSX.Element) : (<FaMoon /> as JSX.Element)}
         </button>
-        
+
         <div className="notification-container" ref={notificationsRef}>
-          <button 
-            className="icon-button notification-toggle" 
-            onClick={toggleNotifications}
-          >
-            <FaBell />
-            {notifications.some(n => !n.read) && <span className="notification-badge"></span>}
+          <button className="icon-button notification-toggle" onClick={toggleNotifications}>
+            <FaBell /> {/* lub: {<FaBell /> as JSX.Element} */}
+            {notifications.some((n) => !n.read) && <span className="notification-badge"></span>}
           </button>
-          
+
           {notificationsOpen && (
             <div className="dropdown-menu notifications-menu">
               <h3>Powiadomienia</h3>
               {notifications.length > 0 ? (
                 <ul>
-                  {notifications.map(notification => (
-                    <li 
-                      key={notification.id} 
+                  {notifications.map((notification) => (
+                    <li
+                      key={notification.id}
                       className={notification.read ? 'read' : 'unread'}
                     >
                       <div className="notification-content">
@@ -113,18 +134,15 @@ const TopBar = ({ toggleSidebar, sidebarOpen, darkMode, toggleDarkMode }) => {
             </div>
           )}
         </div>
-        
+
         <div className="user-container" ref={userMenuRef}>
-          <button 
-            className="user-toggle" 
-            onClick={toggleUserMenu}
-          >
+          <button className="user-toggle" onClick={toggleUserMenu}>
             <span className="user-avatar">
-              <FaUser />
+              <FaUser /> {/* lub: {<FaUser /> as JSX.Element} */}
             </span>
             <span className="user-name">{userName}</span>
           </button>
-          
+
           {userMenuOpen && (
             <div className="dropdown-menu user-menu">
               <ul>
