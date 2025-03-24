@@ -1,0 +1,110 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg-color: #f8f9fa;
+  --text-color: #212529;
+  --sidebar-bg: #ffffff;
+  --card-bg: #ffffff;
+  --primary-color: #0d6efd;
+  --primary-color-rgb: 13, 110, 253;
+  --secondary-color: #6c757d;
+  --secondary-color-rgb: 108, 117, 125;
+  --success-color: #28a745;
+  --success-color-rgb: 40, 167, 69;
+  --danger-color: #dc3545;
+  --danger-color-rgb: 220, 53, 69;
+  --warning-color: #ffc107;
+  --warning-color-rgb: 255, 193, 7;
+  --info-color: #17a2b8;
+  --info-color-rgb: 23, 162, 184;
+  --border-color: #dee2e6;
+  --shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+body.dark-mode {
+  --bg-color: #212529;
+  --text-color: #f8f9fa;
+  --sidebar-bg: #343a40;
+  --card-bg: #343a40;
+  --border-color: #495057;
+  --shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 
+    Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  line-height: 1.5;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+a {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+.page-title {
+  margin-bottom: 1.5rem;
+  font-size: 1.75rem;
+  color: var(--text-color);
+}
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+}
+
+.btn-icon {
+  margin-right: 0.5rem;
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: rgba(var(--primary-color-rgb), 0.9);
+}
+
+.btn-secondary {
+  background-color: var(--secondary-color);
+  color: white;
+}
+
+.btn-secondary:hover {
+  background-color: rgba(var(--secondary-color-rgb), 0.9);
+}
+
+.text-center {
+  text-align: center;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+@media (max-width: 768px) {
+  .page-title {
+    font-size: 1.5rem;
+  }
+}

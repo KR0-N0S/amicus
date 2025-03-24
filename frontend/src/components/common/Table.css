@@ -1,0 +1,97 @@
+.table-container {
+  background-color: var(--card-bg);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin-bottom: 2rem;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th, .data-table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.data-table th {
+  background-color: rgba(var(--secondary-color-rgb), 0.05);
+  font-weight: 600;
+  color: var(--secondary-color);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tbody tr:hover {
+  background-color: rgba(var(--primary-color-rgb), 0.05);
+}
+
+.sortable {
+  cursor: pointer;
+}
+
+.sort-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.5rem;
+}
+
+.actions-column {
+  width: 100px;
+  text-align: center;
+}
+
+.actions-cell {
+  white-space: nowrap;
+  text-align: center;
+}
+
+.action-button {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  margin: 0 0.25rem;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.action-button.edit {
+  color: var(--info-color);
+}
+
+.action-button.delete {
+  color: var(--danger-color);
+}
+
+.action-button:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.no-data {
+  text-align: center;
+  color: var(--secondary-color);
+  padding: 2rem !important;
+}
+
+@media (max-width: 768px) {
+  .table-container {
+    overflow-x: auto;
+  }
+}

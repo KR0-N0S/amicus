@@ -1,0 +1,238 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background-color: white;
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  height: 60px;
+  position: fixed;
+  top: 0;
+  left: 250px;
+  right: 0;
+  transition: left 0.3s ease;
+  z-index: 900;
+}
+
+.main-content.sidebar-collapsed .topbar {
+  left: 60px;
+}
+
+.topbar-left, .topbar-right {
+  display: flex;
+  align-items: center;
+}
+
+.menu-toggle {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: var(--text-color);
+  cursor: pointer;
+  margin-right: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.menu-toggle:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.search-container {
+  display: flex;
+  align-items: center;
+  background-color: var(--bg-color);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border-color);
+  width: 300px;
+}
+
+.search-container input {
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 0.5rem;
+  color: var(--text-color);
+  outline: none;
+}
+
+.search-container button {
+  background: none;
+  border: none;
+  color: var(--text-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.icon-button {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: var(--text-color);
+  cursor: pointer;
+  margin-left: 1rem;
+  padding: 0.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-button:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.notification-container, .user-container {
+  position: relative;
+}
+
+.notification-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  background-color: var(--danger-color);
+  border-radius: 50%;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.5rem;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+  min-width: 240px;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.notifications-menu {
+  width: 300px;
+}
+
+.notifications-menu h3 {
+  padding: 0.75rem 1rem;
+  margin: 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 1rem;
+}
+
+.notifications-menu ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.notifications-menu li {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.notifications-menu li:last-child {
+  border-bottom: none;
+}
+
+.notifications-menu li.unread {
+  background-color: rgba(var(--primary-color-rgb), 0.05);
+}
+
+.notification-content p {
+  margin: 0 0 0.25rem;
+}
+
+.notification-time {
+  font-size: 0.75rem;
+  color: var(--secondary-color);
+}
+
+.user-toggle {
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-color);
+  padding: 0.5rem;
+  margin-left: 1rem;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--primary-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.5rem;
+}
+
+.user-name {
+  margin-left: 0.5rem;
+}
+
+.user-menu ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.user-menu li {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.user-menu li:hover {
+  background-color: rgba(var(--primary-color-rgb), 0.05);
+}
+
+.user-menu li svg {
+  margin-right: 0.5rem;
+}
+
+.no-data {
+  padding: 1rem;
+  text-align: center;
+  color: var(--secondary-color);
+}
+
+@media (max-width: 768px) {
+  .topbar {
+    left: 0;
+  }
+  
+  .main-content.sidebar-collapsed .topbar {
+    left: 0;
+  }
+
+  .search-container {
+    width: 200px;
+  }
+  
+  .user-name {
+    display: none;
+  }
+}
+
+@media (max-width: 576px) {
+  .search-container {
+    width: 150px;
+  }
+}

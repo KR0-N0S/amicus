@@ -1,0 +1,72 @@
+/* Resetowanie styli */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+.app-container {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  overflow-x: hidden;
+  width: 100%;
+  position: relative;
+}
+
+/* Zmienione style dla main-content */
+.main-content {
+  flex: 1;
+  transition: margin-left 0.3s ease, width 0.3s ease;
+  width: calc(100% - 250px);
+  margin-left: 250px;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;  /* Kluczowe! */
+}
+
+.main-content.sidebar-collapsed {
+  width: calc(100% - 60px);
+  margin-left: 60px;
+}
+
+/* Ważne style dla treści */
+.content-area {
+  padding: 1.5rem;
+  margin-top: 60px;
+  width: 100%;
+  max-width: 100%;  /* Kluczowe! */
+  overflow-x: hidden;  /* Kluczowe! */
+  flex: 1;
+}
+
+/* Przy odświeżaniu strony, aplikować ten styl od razu */
+.app-container, .main-content, .content-area {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Dodane ograniczenie dla wszystkich dzieci content-area */
+.content-area > * {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+    width: 100%;
+  }
+  
+  .main-content.sidebar-collapsed {
+    margin-left: 0;
+    width: 100%;
+  }
+}

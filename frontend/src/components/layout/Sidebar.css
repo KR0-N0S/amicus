@@ -1,0 +1,158 @@
+.sidebar {
+  width: 250px;
+  height: 100vh;
+  background-color: #31373d;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  transition: width 0.3s ease;
+  z-index: 1000;
+  position: fixed;
+  left: 0;
+  top: 0;
+}
+
+.sidebar.closed {
+  width: 60px;
+}
+
+.sidebar-header {
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  height: 60px;
+}
+
+.app-logo {
+  margin: 0;
+  font-size: 1.5rem;
+  color: white;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.sidebar-nav {
+  padding: 1rem 0;
+  overflow-y: auto;
+  height: calc(100vh - 60px);
+}
+
+.sidebar-nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: none;
+  transition: all 0.2s;
+  border-left: 3px solid transparent;
+}
+
+.menu-item:hover, .menu-item.active {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+  border-left-color: var(--primary-color);
+}
+
+.menu-item .icon {
+  font-size: 1.25rem;
+  margin-right: 0.75rem;
+  min-width: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.menu-item .title {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.with-submenu {
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+}
+
+.with-submenu .arrow {
+  margin-left: auto;
+}
+
+.submenu {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.with-submenu.expanded + .submenu {
+  max-height: 500px;
+}
+
+.submenu.floating {
+  position: absolute;
+  left: 60px;
+  background-color: #31373d;
+  border-radius: 0 4px 4px 0;
+  box-shadow: 5px 0 10px rgba(0, 0, 0, 0.1);
+  min-width: 220px;
+  z-index: 1100;
+  max-height: none;
+}
+
+.submenu-item-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+}
+
+.submenu-item {
+  display: block;
+  padding: 0.75rem 1rem 0.75rem 2.5rem;
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.submenu-item:hover, .submenu-item.active {
+  color: white;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.add-new-button {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: none;
+  padding: 5px 10px;
+  margin-right: 5px;
+  border-radius: 3px;
+}
+
+.submenu-item-container:hover .add-new-button {
+  display: block;
+}
+
+.add-new-button:hover {
+  color: white;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-100%);
+  }
+  
+  .sidebar.open {
+    transform: translateX(0);
+  }
+}

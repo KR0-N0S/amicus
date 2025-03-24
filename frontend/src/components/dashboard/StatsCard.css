@@ -1,0 +1,84 @@
+.stats-card {
+  background-color: var(--card-bg);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stats-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+.stats-card.primary {
+  border-left: 4px solid var(--primary-color);
+}
+
+.stats-card.success {
+  border-left: 4px solid var(--success-color);
+}
+
+.stats-card.warning {
+  border-left: 4px solid var(--warning-color);
+}
+
+.stats-card.danger {
+  border-left: 4px solid var(--danger-color);
+}
+
+.stats-icon {
+  font-size: 2.5rem;
+  margin-right: 1.5rem;
+  color: var(--secondary-color);
+  background-color: rgba(var(--secondary-color-rgb), 0.1);
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.stats-content {
+  flex: 1;
+}
+
+.stats-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--secondary-color);
+}
+
+.stats-value {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.stats-trend {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.stats-trend.up {
+  color: var(--success-color);
+  background-color: rgba(var(--success-color-rgb), 0.1);
+}
+
+.stats-trend.down {
+  color: var(--danger-color);
+  background-color: rgba(var(--danger-color-rgb), 0.1);
+}
+
+.trend-arrow {
+  margin-right: 0.25rem;
+}

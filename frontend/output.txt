@@ -1,0 +1,704 @@
+===== /src/components/layout/Sidebar.jsx =====
+import React, { useState } from 'react';
+import { NavLink } from 'react-router-dom';
+import { 
+  FaHome, FaListUl, FaChartBar, FaCog, FaCalendarAlt, 
+  FaUser, FaChevronDown, FaChevronUp 
+} from 'react-icons/fa';
+import './Sidebar.css';
+
+const Sidebar = ({ isOpen }) => {
+  const [expandedMenus, setExpandedMenus] = useState({});
+  
+  const toggleSubmenu = (menuKey) => {
+    setExpandedMenus(prev => ({
+      ...prev,
+      [menuKey]: !prev[menuKey]
+    }));
+  };
+  
+  const menuItems = [
+    {
+      title: 'Panel główny',
+      icon: <FaHome />,
+      path: '/dashboard'
+    },
+    {
+      title: 'Dane',
+      icon: <FaListUl />,
+      submenu: true,
+      submenuKey: 'data',
+      items: [
+        { title: 'Lista wszystkich', path: '/data/all' },
+        { title: 'Oczekujące', path: '/data/pending' },
+        { title: 'Zakończone', path: '/data/completed' }
+      ]
+    },
+    {
+      title: 'Statystyki',
+      icon: <FaChartBar />,
+      path: '/statistics'
+    },
+    {
+      title: 'Kalendarz',
+      icon: <FaCalendarAlt />,
+      path: '/calendar'
+    },
+    {
+      title: 'Użytkownicy',
+      icon: <FaUser />,
+      path: '/users'
+    },
+    {
+      title: 'Ustawienia',
+      icon: <FaCog />,
+      path: '/settings'
+    }
+  ];
+  
+  return (
+    <div className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
+      <div className="sidebar-header">
+        <h2 className="app-logo">AmicusApp</h2>
+      </div>
+      
+      <nav className="sidebar-nav">
+        <ul>
+          {menuItems.map((item, index) => (
+            <li key={index}>
+              {item.submenu ? (
+                <>
+                  <div 
+                    className="menu-item with-submenu" 
+                    onClick={() => toggleSubmenu(item.submenuKey)}
+                  >
+                    <span className="icon">{item.icon}</span>
+                    <span className="title">{item.title}</span>
+                    <span className="arrow">
+                      {expandedMenus[item.submenuKey] ? <FaChevronUp /> : <FaChevronDown />}
+                    </span>
+                  </div>
+                  
+                  {expandedMenus[item.submenuKey] && (
+                    <ul className="submenu">
+                      {item.items.map((subItem, subIndex) => (
+                        <li key={subIndex}>
+                          <NavLink to={subItem.path} className="submenu-item">
+                            {subItem.title}
+                          </NavLink>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <NavLink 
+                  to={item.path} 
+                  className={({ isActive }) => 
+                    `menu-item ${isActive ? 'active' : ''}`
+                  }
+                >
+                  <span className="icon">{item.icon}</span>
+                  <span className="title">{item.title}</span>
+                </NavLink>
+              )}
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </div>
+  );
+};
+
+export default Sidebar;
+
+===== /src/components/layout/Sidebar.css =====
+.sidebar {
+  width: 250px;
+  min-height: 100vh;
+  background-color: var(--sidebar-bg);
+  box-shadow: var(--shadow);
+  transition: all 0.3s ease;
+  z-index: 1000;
+}
+
+.sidebar.closed {
+  width: 70px;
+}
+
+.sidebar-header {
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.app-logo {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--primary-color);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.sidebar-nav {
+  padding: 1rem 0;
+}
+
+.sidebar-nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  color: var(--text-color);
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.menu-item:hover, .menu-item.active {
+  background-color: rgba(var(--primary-color-rgb), 0.1);
+  color: var(--primary-color);
+}
+
+.menu-item .icon {
+  font-size: 1.25rem;
+  margin-right: 0.75rem;
+  min-width: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.menu-item .title {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.with-submenu {
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+}
+
+.with-submenu .arrow {
+  margin-left: auto;
+}
+
+.submenu {
+  padding-left: 1rem;
+  max-height: 500px;
+  transition: max-height 0.3s ease;
+}
+
+.submenu-item {
+  display: block;
+  padding: 0.5rem 1rem;
+  padding-left: 2.5rem;
+  color: var(--text-color);
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.submenu-item:hover, .submenu-item.active {
+  color: var(--primary-color);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100%;
+    transform: translateX(-100%);
+  }
+  
+  .sidebar.open {
+    transform: translateX(0);
+    width: 250px;
+  }
+}
+
+===== /src/components/layout/TopBar.jsx =====
+import React, { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  FaBars, FaTimes, FaSearch, FaBell, FaUser, 
+  FaMoon, FaSun, FaSignOutAlt, FaCog 
+} from 'react-icons/fa';
+import useOutsideClick from '../../hooks/useOutsideClick';
+import './TopBar.css';
+import { useAuth } from '../../context/AuthContext';
+
+const TopBar = ({ toggleSidebar, sidebarOpen, darkMode, toggleDarkMode }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const { logout, user } = useAuth();
+  
+  const navigate = useNavigate();
+  const userMenuRef = useRef(null);
+  const notificationsRef = useRef(null);
+  
+  useOutsideClick(userMenuRef, () => setUserMenuOpen(false));
+  useOutsideClick(notificationsRef, () => setNotificationsOpen(false));
+  
+  const handleSearch = (e) => {
+    e.preventDefault();
+    // Implementacja wyszukiwania
+    console.log('Searching for:', searchQuery);
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const toggleUserMenu = () => {
+    setUserMenuOpen(!userMenuOpen);
+    if (notificationsOpen) setNotificationsOpen(false);
+  };
+
+  const toggleNotifications = () => {
+    setNotificationsOpen(!notificationsOpen);
+    if (userMenuOpen) setUserMenuOpen(false);
+  };
+  
+  // Przykładowe powiadomienia
+  const notifications = [
+    { id: 1, text: 'Nowe powiadomienie', time: '5 min temu', read: false },
+    { id: 2, text: 'Aktualizacja systemu', time: '1 godz. temu', read: true },
+  ];
+
+  const userName = user ? user.first_name || user.email : 'Użytkownik';
+
+  return (
+    <div className="topbar">
+      <div className="topbar-left">
+        <button className="menu-toggle" onClick={toggleSidebar}>
+          {sidebarOpen ? <FaTimes /> : <FaBars />}
+        </button>
+        
+        <form className="search-form" onSubmit={handleSearch}>
+          <div className="search-container">
+            <input
+              type="text"
+              placeholder="Szukaj..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <button type="submit">
+              <FaSearch />
+            </button>
+          </div>
+        </form>
+      </div>
+      
+      <div className="topbar-right">
+        <button 
+          className="icon-button theme-toggle" 
+          onClick={toggleDarkMode}
+          title={darkMode ? "Przełącz na jasny motyw" : "Przełącz na ciemny motyw"}
+        >
+          {darkMode ? <FaSun /> : <FaMoon />}
+        </button>
+        
+        <div className="notification-container" ref={notificationsRef}>
+          <button 
+            className="icon-button notification-toggle" 
+            onClick={toggleNotifications}
+          >
+            <FaBell />
+            {notifications.some(n => !n.read) && <span className="notification-badge"></span>}
+          </button>
+          
+          {notificationsOpen && (
+            <div className="dropdown-menu notifications-menu">
+              <h3>Powiadomienia</h3>
+              {notifications.length > 0 ? (
+                <ul>
+                  {notifications.map(notification => (
+                    <li 
+                      key={notification.id} 
+                      className={notification.read ? 'read' : 'unread'}
+                    >
+                      <div className="notification-content">
+                        <p>{notification.text}</p>
+                        <span className="notification-time">{notification.time}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="no-data">Brak powiadomień</p>
+              )}
+            </div>
+          )}
+        </div>
+        
+        <div className="user-container" ref={userMenuRef}>
+          <button 
+            className="user-toggle" 
+            onClick={toggleUserMenu}
+          >
+            <span className="user-avatar">
+              <FaUser />
+            </span>
+            <span className="user-name">{userName}</span>
+          </button>
+          
+          {userMenuOpen && (
+            <div className="dropdown-menu user-menu">
+              <ul>
+                <li onClick={() => navigate('/profile')}>
+                  <FaUser /> Profil
+                </li>
+                <li onClick={() => navigate('/settings')}>
+                  <FaCog /> Ustawienia
+                </li>
+                <li onClick={handleLogout}>
+                  <FaSignOutAlt /> Wyloguj
+                </li>
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default TopBar;
+
+===== /src/components/layout/TopBar.css =====
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background-color: var(--card-bg);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  height: 60px;
+  z-index: 900;
+}
+
+.topbar-left, .topbar-right {
+  display: flex;
+  align-items: center;
+}
+
+.menu-toggle {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--text-color);
+  cursor: pointer;
+  margin-right: 1rem;
+  display: flex;
+  align-items: center;
+}
+
+.search-container {
+  display: flex;
+  align-items: center;
+  background-color: var(--bg-color);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border-color);
+  width: 300px;
+}
+
+.search-container input {
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 0.5rem;
+  color: var(--text-color);
+  outline: none;
+}
+
+.search-container button {
+  background: none;
+  border: none;
+  color: var(--text-color);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.icon-button {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: var(--text-color);
+  cursor: pointer;
+  margin-left: 1rem;
+  padding: 0.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-button:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.notification-container, .user-container {
+  position: relative;
+}
+
+.notification-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  background-color: var(--danger-color);
+  border-radius: 50%;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.5rem;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: var(--shadow);
+  min-width: 240px;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.notifications-menu {
+  width: 300px;
+}
+
+.notifications-menu h3 {
+  padding: 0.75rem 1rem;
+  margin: 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 1rem;
+}
+
+.notifications-menu ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.notifications-menu li {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.notifications-menu li:last-child {
+  border-bottom: none;
+}
+
+.notifications-menu li.unread {
+  background-color: rgba(var(--primary-color-rgb), 0.05);
+}
+
+.notification-content p {
+  margin: 0 0 0.25rem;
+}
+
+.notification-time {
+  font-size: 0.75rem;
+  color: var(--secondary-color);
+}
+
+.user-toggle {
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-color);
+  padding: 0.5rem;
+  margin-left: 1rem;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--primary-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.5rem;
+}
+
+.user-name {
+  margin-left: 0.5rem;
+}
+
+.user-menu ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.user-menu li {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.user-menu li:hover {
+  background-color: rgba(var(--primary-color-rgb), 0.05);
+}
+
+.user-menu li svg {
+  margin-right: 0.5rem;
+}
+
+.no-data {
+  padding: 1rem;
+  text-align: center;
+  color: var(--secondary-color);
+}
+
+@media (max-width: 768px) {
+  .search-container {
+    width: 200px;
+  }
+  
+  .user-name {
+    display: none;
+  }
+}
+
+@media (max-width: 576px) {
+  .search-container {
+    width: 150px;
+  }
+}
+
+===== /src/components/layout/MainLayout.jsx =====
+import React, { useState } from 'react';
+import { Outlet } from 'react-router-dom';
+import Sidebar from './Sidebar';
+import TopBar from './TopBar';
+import './MainLayout.css';
+
+const MainLayout = () => {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
+
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+    document.documentElement.classList.toggle('dark-mode');
+  };
+  
+  return (
+    <div className={`app-container ${darkMode ? 'dark-theme' : 'light-theme'}`}>
+      <Sidebar isOpen={sidebarOpen} />
+      
+      <div className="main-content">
+        <TopBar 
+          toggleSidebar={toggleSidebar} 
+          sidebarOpen={sidebarOpen}
+          darkMode={darkMode}
+          toggleDarkMode={toggleDarkMode}
+        />
+        
+        <div className="content-area">
+          <Outlet />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default MainLayout;
+
+===== /src/components/layout/MainLayout.css =====
+.app-container {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: all 0.3s ease;
+}
+
+.light-theme {
+  --bg-color: #f8f9fa;
+  --text-color: #212529;
+  --sidebar-bg: #ffffff;
+  --card-bg: #ffffff;
+  --primary-color: #0d6efd;
+  --primary-color-rgb: 13, 110, 253;
+  --secondary-color: #6c757d;
+  --secondary-color-rgb: 108, 117, 125;
+  --success-color: #28a745;
+  --success-color-rgb: 40, 167, 69;
+  --danger-color: #dc3545;
+  --danger-color-rgb: 220, 53, 69;
+  --warning-color: #ffc107;
+  --warning-color-rgb: 255, 193, 7;
+  --info-color: #17a2b8;
+  --info-color-rgb: 23, 162, 184;
+  --border-color: #dee2e6;
+  --shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.dark-theme {
+  --bg-color: #212529;
+  --text-color: #f8f9fa;
+  --sidebar-bg: #343a40;
+  --card-bg: #343a40;
+  --primary-color: #0d6efd;
+  --primary-color-rgb: 13, 110, 253;
+  --secondary-color: #6c757d;
+  --secondary-color-rgb: 108, 117, 125;
+  --success-color: #28a745;
+  --success-color-rgb: 40, 167, 69;
+  --danger-color: #dc3545;
+  --danger-color-rgb: 220, 53, 69;
+  --warning-color: #ffc107;
+  --warning-color-rgb: 255, 193, 7;
+  --info-color: #17a2b8;
+  --info-color-rgb: 23, 162, 184;
+  --border-color: #495057;
+  --shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+}
+
+.content-area {
+  flex: 1;
+  padding: 1.5rem;
+  overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+  }
+}
+

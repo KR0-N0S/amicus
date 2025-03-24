@@ -1,0 +1,41 @@
+.status-badge {
+  display: inline-block;
+  padding: 0.35em 0.65em;
+  font-size: 0.75em;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: baseline;
+  border-radius: 0.25rem;
+}
+
+.status-badge.primary {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.status-badge.secondary {
+  background-color: var(--secondary-color);
+  color: white;
+}
+
+.status-badge.success {
+  background-color: var(--success-color);
+  color: white;
+}
+
+.status-badge.danger {
+  background-color: var(--danger-color);
+  color: white;
+}
+
+.status-badge.warning {
+  background-color: var(--warning-color);
+  color: #212529;
+}
+
+.status-badge.info {
+  background-color: var(--info-color);
+  color: white;
+}
