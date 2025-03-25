@@ -1,6 +1,14 @@
 const authService = require('../services/authService');
 const { AppError } = require('../middleware/errorHandler');
 
+// Konfiguracja opcji cookies
+const cookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production', // tylko HTTPS w produkcji
+  sameSite: 'strict',
+  maxAge: 7 * 24 * 60 * 60 * 1000 // 7 dni w milisekundach
+};
+
 exports.register = async (req, res, next) => {
   try {
     const userData = {
@@ -20,12 +28,15 @@ exports.register = async (req, res, next) => {
 
     const result = await authService.register(userData, organizationData);
 
+    // Dodajemy refresh token do httpOnly cookie
+    res.cookie('refreshToken', result.refreshToken, cookieOptions);
+
     res.status(201).json({
       status: 'success',
       data: {
         user: result.user,
         organization: result.organization,
-        token: result.token
+        token: result.accessToken // zwracamy tylko access token w odpowiedzi
       }
     });
   } catch (error) {
@@ -50,12 +61,15 @@ exports.login = async (req, res, next) => {
       const result = await authService.login(email, password);
       console.log('[CONTROLLER] ✅ Logowanie zakończone sukcesem');
       
+      // Dodajemy refresh token do httpOnly cookie
+      res.cookie('refreshToken', result.refreshToken, cookieOptions);
+
       return res.status(200).json({
         status: 'success',
         data: {
           user: result.user,
           organizations: result.organizations,
-          token: result.token
+          token: result.accessToken // zwracamy tylko access token w odpowiedzi
         }
       });
     } catch (serviceError) {
@@ -78,6 +92,51 @@ exports.getMe = async (req, res, next) => {
         user: result.user,
         organizations: result.organizations
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Nowy kontroler do odświeżania tokenu
+exports.refreshToken = async (req, res, next) => {
+  try {
+    // Pobierz token z cookie
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+      return next(new AppError('Brak refresh tokenu', 401));
+    }
+
+    // Odśwież token
+    const tokens = await authService.refreshAccessToken(refreshToken);
+    
+    // Ustaw nowy refresh token w cookie
+    res.cookie('refreshToken', tokens.refreshToken, cookieOptions);
+
+    // Zwróć tylko access token
+    res.status(200).json({
+      status: 'success',
+      data: {
+        token: tokens.accessToken
+      }
+    });
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    res.clearCookie('refreshToken'); // usuń nieprawidłowy refresh token
+    return next(new AppError('Refresh token jest nieprawidłowy lub wygasł', 401));
+  }
+};
+
+// Nowy kontroler do wylogowywania
+exports.logout = async (req, res, next) => {
+  try {
+    // Usuń refresh token cookie
+    res.clearCookie('refreshToken');
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Wylogowano pomyślnie'
     });
   } catch (error) {
     next(error);

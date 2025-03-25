@@ -30,13 +30,14 @@ class AuthService {
       organizationResult = newOrganization;
     }
 
-    // Generuj token JWT
-    const token = this.generateToken(newUser.id);
+    // Generuj tokeny
+    const { accessToken, refreshToken } = this.generateTokens(newUser.id);
 
     return {
       user: newUser,
       organization: organizationResult,
-      token
+      accessToken,
+      refreshToken
     };
   }
 
@@ -78,10 +79,10 @@ class AuthService {
         organizations = [];
       }
 
-      // Generuj token JWT
-      console.log('[AUTH] Generowanie tokenu JWT...');
-      const token = this.generateToken(user.id);
-      console.log('[AUTH] ✅ Token wygenerowany');
+      // Generuj tokeny
+      console.log('[AUTH] Generowanie tokenów JWT...');
+      const { accessToken, refreshToken } = this.generateTokens(user.id);
+      console.log('[AUTH] ✅ Tokeny wygenerowane');
 
       // Usuń hasło z danych użytkownika przed zwróceniem
       const userToReturn = { ...user };
@@ -91,7 +92,8 @@ class AuthService {
       return {
         user: userToReturn,
         organizations,
-        token
+        accessToken,
+        refreshToken
       };
     } catch (error) {
       console.log('[AUTH] ❌ Błąd podczas logowania:', error.message);
@@ -99,12 +101,55 @@ class AuthService {
     }
   }
 
-  generateToken(userId) {
-    return jwt.sign(
+  // Nowa metoda generująca dwa tokeny
+  generateTokens(userId) {
+    const accessToken = jwt.sign(
       { id: userId },
-      process.env.JWT_SECRET || 'amicus_default_secret',
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      process.env.JWT_ACCESS_SECRET || 'amicus_access_secret',
+      { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '30m' } // krótki czas życia (30 min)
     );
+    
+    const refreshToken = jwt.sign(
+      { id: userId },
+      process.env.JWT_REFRESH_SECRET || 'amicus_refresh_secret',
+      { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' } // długi czas życia (7 dni)
+    );
+    
+    return { accessToken, refreshToken };
+  }
+
+  // Stara metoda dla kompatybilności wstecznej
+  generateToken(userId) {
+    return this.generateTokens(userId).accessToken;
+  }
+
+  // Nowa metoda do odświeżania access tokenu
+  async refreshAccessToken(refreshToken) {
+    try {
+      // Weryfikuj refresh token
+      const decoded = jwt.verify(
+        refreshToken, 
+        process.env.JWT_REFRESH_SECRET || 'amicus_refresh_secret'
+      );
+      
+      const userId = decoded.id;
+      
+      // Sprawdź czy użytkownik istnieje
+      const user = await userRepository.findById(userId);
+      if (!user) {
+        throw new Error('Użytkownik nie znaleziony');
+      }
+      
+      // Generuj nowy access token
+      const { accessToken, refreshToken: newRefreshToken } = this.generateTokens(userId);
+      
+      return {
+        accessToken,
+        refreshToken: newRefreshToken
+      };
+    } catch (error) {
+      throw new Error('Nieprawidłowy refresh token');
+    }
   }
 
   async getUserProfile(userId) {

@@ -51,8 +51,16 @@ const swaggerOptions = {
 
 const swaggerDocs = swaggerJsDoc(swaggerOptions);
 
+// Poprawiona konfiguracja CORS
+const corsOptions = {
+  origin: 'http://83.150.236.135:3000',  // dokładny adres frontendu
+  credentials: true,  // kluczowe dla obsługi cookies
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
 // Middleware
-app.use(cors()); // Pozwala na żądania CORS
+app.use(cors(corsOptions)); // Zaktualizowana konfiguracja CORS
 app.use(helmet()); // Zabezpieczenia nagłówków HTTP
 app.use(express.json()); // Parsowanie JSON w ciele żądania
 app.use(express.urlencoded({ extended: true })); // Parsowanie danych formularzy

@@ -1,12 +1,11 @@
-import { jwtDecode } from 'jwt-decode'; // Poprawny import
+import { jwtDecode } from 'jwt-decode';
 
 interface DecodedToken {
-  userId: number;
-  email: string;
+  id: number;
   exp: number;
 }
 
-// Zapisywanie tokenu po zalogowaniu
+// Zapisywanie tokenu po zalogowaniu (tylko access token)
 export const setToken = (token: string): void => {
   localStorage.setItem('token', token);
 };
@@ -25,10 +24,9 @@ export const isAuthenticated = (): boolean => {
     const decoded = jwtDecode<DecodedToken>(token);
     const currentTime = Date.now() / 1000;
     
-    // Token wygasł
+    // Token wygasł, ale nie usuwamy go od razu - pozwalamy interceptorowi próbować odświeżyć
     if (decoded.exp < currentTime) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      // Jesteśmy w widoku statycznym, więc nie odświeżamy automatycznie
       return false;
     }
     
@@ -40,8 +38,19 @@ export const isAuthenticated = (): boolean => {
   }
 };
 
-// Wylogowanie
-export const logout = (): void => {
+// Wylogowanie - teraz również czyści refresh token przez API
+export const logout = async (): Promise<void> => {
+  try {
+    // Wywołanie endpointu logout, który usuwa refresh token cookie
+    await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:4000/api'}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',  // Ważne dla wysyłania cookies
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+  }
+  
+  // Zawsze usuwamy lokalne dane, niezależnie od wyniku zapytania
   localStorage.removeItem('token');
   localStorage.removeItem('user');
   window.location.href = '/login';
