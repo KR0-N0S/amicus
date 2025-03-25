@@ -23,6 +23,9 @@ exports.verifyToken = async (req, res, next) => {
       
       // Zapisz ID użytkownika w obiekcie żądania
       req.userId = decoded.id;
+      
+      // Zapisz informacje o organizacjach i rolach
+      req.userOrganizations = decoded.organizations || [];
     } catch (jwtError) {
       if (jwtError.name === 'TokenExpiredError') {
         return res.status(401).json({ 
@@ -47,7 +50,10 @@ exports.verifyToken = async (req, res, next) => {
 
     // Dodaj obiekt użytkownika do żądania (bez hasła)
     const { password, ...userWithoutPassword } = user;
-    req.user = userWithoutPassword;
+    req.user = {
+      ...userWithoutPassword,
+      organizations: req.userOrganizations
+    };
 
     next();
   } catch (error) {

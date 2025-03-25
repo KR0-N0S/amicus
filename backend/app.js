@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const dotenv = require('dotenv');
+const cookieParser = require('cookie-parser'); // Dodane
 const swaggerJsDoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 
@@ -62,6 +63,7 @@ const corsOptions = {
 // Middleware
 app.use(cors(corsOptions)); // Zaktualizowana konfiguracja CORS
 app.use(helmet()); // Zabezpieczenia nagłówków HTTP
+app.use(cookieParser()); // Dodane - parsowanie cookies
 app.use(express.json()); // Parsowanie JSON w ciele żądania
 app.use(express.urlencoded({ extended: true })); // Parsowanie danych formularzy
 

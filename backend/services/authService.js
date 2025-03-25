@@ -26,12 +26,17 @@ class AuthService {
     // Jeśli przekazano dane organizacji, utwórz ją i przypisz użytkownika jako administratora
     if (organizationData && organizationData.name) {
       const newOrganization = await organizationRepository.create(organizationData);
-      await organizationRepository.addUserToOrganization(newOrganization.id, newUser.id, 'admin');
+      await organizationRepository.addUserToOrganization(newOrganization.id, newUser.id, 'owner');
       organizationResult = newOrganization;
     }
 
-    // Generuj tokeny
-    const { accessToken, refreshToken } = this.generateTokens(newUser.id);
+    // Pobierz wszystkie organizacje i role użytkownika
+    const userOrganizations = organizationResult 
+      ? [{ id: organizationResult.id, role: 'owner' }] 
+      : [];
+
+    // Generuj tokeny z uwzględnieniem organizacji i ról
+    const { accessToken, refreshToken } = this.generateTokens(newUser.id, userOrganizations);
 
     return {
       user: newUser,
@@ -70,18 +75,30 @@ class AuthService {
       // Pobierz organizacje użytkownika
       console.log('[AUTH] Pobieranie organizacji użytkownika...');
       let organizations = [];
+      let userOrganizationsWithRoles = [];
+      
       try {
         organizations = await organizationRepository.getUserOrganizations(user.id);
         console.log('[AUTH] ✅ Pobrano organizacje:', organizations.length);
+        
+        // Pobierz role użytkownika w każdej organizacji
+        for (const org of organizations) {
+          const role = await organizationRepository.getUserRole(org.id, user.id);
+          userOrganizationsWithRoles.push({
+            id: org.id,
+            role: role
+          });
+        }
       } catch (orgError) {
         console.log('[AUTH] ⚠️ Błąd podczas pobierania organizacji:', orgError.message);
         // Kontynuuj mimo błędu organizacji
         organizations = [];
+        userOrganizationsWithRoles = [];
       }
 
-      // Generuj tokeny
+      // Generuj tokeny z uwzględnieniem organizacji i ról
       console.log('[AUTH] Generowanie tokenów JWT...');
-      const { accessToken, refreshToken } = this.generateTokens(user.id);
+      const { accessToken, refreshToken } = this.generateTokens(user.id, userOrganizationsWithRoles);
       console.log('[AUTH] ✅ Tokeny wygenerowane');
 
       // Usuń hasło z danych użytkownika przed zwróceniem
@@ -101,16 +118,22 @@ class AuthService {
     }
   }
 
-  // Nowa metoda generująca dwa tokeny
-  generateTokens(userId) {
+  // Zmodyfikowana metoda generująca dwa tokeny z informacjami o organizacjach i rolach
+  generateTokens(userId, userOrganizations = []) {
+    const tokenPayload = {
+      id: userId,
+      // Dodajemy informacje o organizacjach i rolach do tokenu
+      organizations: userOrganizations
+    };
+
     const accessToken = jwt.sign(
-      { id: userId },
+      tokenPayload,
       process.env.JWT_ACCESS_SECRET || 'amicus_access_secret',
       { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '30m' } // krótki czas życia (30 min)
     );
     
     const refreshToken = jwt.sign(
-      { id: userId },
+      tokenPayload,
       process.env.JWT_REFRESH_SECRET || 'amicus_refresh_secret',
       { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' } // długi czas życia (7 dni)
     );
@@ -123,7 +146,7 @@ class AuthService {
     return this.generateTokens(userId).accessToken;
   }
 
-  // Nowa metoda do odświeżania access tokenu
+  // Zmodyfikowana metoda do odświeżania access tokenu
   async refreshAccessToken(refreshToken) {
     try {
       // Weryfikuj refresh token
@@ -133,6 +156,7 @@ class AuthService {
       );
       
       const userId = decoded.id;
+      const userOrganizations = decoded.organizations || [];
       
       // Sprawdź czy użytkownik istnieje
       const user = await userRepository.findById(userId);
@@ -140,13 +164,10 @@ class AuthService {
         throw new Error('Użytkownik nie znaleziony');
       }
       
-      // Generuj nowy access token
-      const { accessToken, refreshToken: newRefreshToken } = this.generateTokens(userId);
+      // Generuj nowy access token z zachowaniem informacji o organizacjach i rolach
+      const tokens = this.generateTokens(userId, userOrganizations);
       
-      return {
-        accessToken,
-        refreshToken: newRefreshToken
-      };
+      return tokens;
     } catch (error) {
       throw new Error('Nieprawidłowy refresh token');
     }
@@ -160,6 +181,16 @@ class AuthService {
 
     // Pobierz organizacje użytkownika
     const organizations = await organizationRepository.getUserOrganizations(userId);
+    
+    // Pobierz role użytkownika w każdej organizacji
+    const organizationsWithRoles = [];
+    for (const org of organizations) {
+      const role = await organizationRepository.getUserRole(org.id, userId);
+      organizationsWithRoles.push({
+        ...org,
+        role
+      });
+    }
 
     // Usuń hasło z obiektu użytkownika
     const userToReturn = { ...user };
@@ -167,7 +198,7 @@ class AuthService {
     
     return {
       user: userToReturn,
-      organizations
+      organizations: organizationsWithRoles
     };
   }
 }

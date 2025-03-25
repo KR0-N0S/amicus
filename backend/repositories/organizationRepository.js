@@ -3,7 +3,7 @@ const db = require('../config/db');
 class OrganizationRepository {
   async findById(id) {
     const result = await db.query(
-      'SELECT * FROM organizations WHERE id = ',
+      'SELECT * FROM organizations WHERE id = $1',
       [id]
     );
     return result.rows[0];
@@ -15,7 +15,7 @@ class OrganizationRepository {
     const result = await db.query(
       `INSERT INTO organizations 
        (name, street, house_number, city, postal_code, tax_id, created_at, updated_at) 
-       VALUES (, , , , , , NOW(), NOW()) 
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) 
        RETURNING *`,
       [name, street, house_number, city, postal_code, tax_id]
     );
@@ -27,7 +27,7 @@ class OrganizationRepository {
     const result = await db.query(
       `INSERT INTO organization_user 
        (organization_id, user_id, role, created_at, updated_at) 
-       VALUES (, , , NOW(), NOW()) 
+       VALUES ($1, $2, $3, NOW(), NOW()) 
        RETURNING *`,
       [organizationId, userId, role]
     );
@@ -39,7 +39,7 @@ class OrganizationRepository {
     const result = await db.query(
       `SELECT o.* FROM organizations o 
        JOIN organization_user ou ON o.id = ou.organization_id 
-       WHERE ou.user_id = `,
+       WHERE ou.user_id = $1`,
       [userId]
     );
     
@@ -49,7 +49,7 @@ class OrganizationRepository {
   async getUserRole(organizationId, userId) {
     const result = await db.query(
       `SELECT role FROM organization_user 
-       WHERE organization_id =  AND user_id = `,
+       WHERE organization_id = $1 AND user_id = $2`,
       [organizationId, userId]
     );
     
