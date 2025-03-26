@@ -1,6 +1,6 @@
 const { query } = require('../config/db');
 
-// Funkcje repozytorium użytkowników
+// Istniejące funkcje
 async function findById(id) {
   const result = await query('SELECT * FROM users WHERE id = $1', [id]);
   return result.rows[0];
@@ -56,9 +56,132 @@ async function updatePassword(id, password) {
   return result.rows[0];
 }
 
+// Pobranie wszystkich użytkowników (dla SuperAdmin)
 async function getAllUsers() {
-  const result = await query('SELECT * FROM users ORDER BY created_at DESC');
+  const result = await query(
+    `SELECT u.*, 
+            array_agg(DISTINCT jsonb_build_object(
+              'id', o.id,
+              'name', o.name,
+              'city', o.city,
+              'street', o.street,
+              'house_number', o.house_number,
+              'role', ou.role
+            )) FILTER (WHERE o.id IS NOT NULL) as organizations,
+            array_agg(DISTINCT jsonb_build_object(
+              'id', h.id,
+              'herd_id', h.herd_id,
+              'eval_herd_no', h.eval_herd_no
+            )) FILTER (WHERE h.id IS NOT NULL) as herds
+     FROM users u
+     LEFT JOIN organization_user ou ON u.id = ou.user_id
+     LEFT JOIN organizations o ON ou.organization_id = o.id
+     LEFT JOIN herds h ON h.owner_id = u.id
+     GROUP BY u.id
+     ORDER BY u.last_name, u.first_name`
+  );
   return result.rows;
+}
+
+// Pobranie użytkowników należących do konkretnej organizacji (dla Owner)
+async function getUsersByOrganization(organizationId) {
+  console.log(`[USER_REPO] Pobieranie użytkowników dla organizacji ${organizationId}`);
+  
+  const result = await query(
+    `SELECT u.*, 
+            array_agg(DISTINCT jsonb_build_object(
+              'id', o.id,
+              'name', o.name,
+              'city', o.city,
+              'street', o.street,
+              'house_number', o.house_number,
+              'role', ou.role
+            )) FILTER (WHERE o.id IS NOT NULL) as organizations,
+            array_agg(DISTINCT jsonb_build_object(
+              'id', h.id,
+              'herd_id', h.herd_id,
+              'eval_herd_no', h.eval_herd_no
+            )) FILTER (WHERE h.id IS NOT NULL) as herds
+     FROM users u
+     JOIN organization_user ou ON u.id = ou.user_id
+     LEFT JOIN organizations o ON ou.organization_id = o.id 
+     LEFT JOIN herds h ON h.owner_id = u.id
+     WHERE ou.organization_id = $1
+     GROUP BY u.id
+     ORDER BY u.last_name, u.first_name`,
+    [organizationId]
+  );
+  
+  console.log(`[USER_REPO] Znaleziono ${result.rows.length} użytkowników w organizacji ${organizationId}`);
+  
+  return result.rows;
+}
+
+// Pobranie użytkowników należących do konkretnej organizacji z wyjątkiem właścicieli i innych pracowników
+async function getClientsInOrganization(organizationId, excludedRoles = ['Owner', 'Employee', 'SuperAdmin', 'OfficeStaff', 'Inseminator', 'VetTech', 'Vet']) {
+  const placeholders = excludedRoles.map((_, index) => `$${index + 2}`).join(', ');
+  
+  const result = await query(
+    `SELECT u.*, 
+            array_agg(DISTINCT jsonb_build_object(
+              'id', o.id,
+              'name', o.name,
+              'city', o.city,
+              'street', o.street,
+              'house_number', o.house_number,
+              'role', ou.role
+            )) FILTER (WHERE o.id IS NOT NULL) as organizations,
+            array_agg(DISTINCT jsonb_build_object(
+              'id', h.id,
+              'herd_id', h.herd_id,
+              'eval_herd_no', h.eval_herd_no
+            )) FILTER (WHERE h.id IS NOT NULL) as herds
+     FROM users u
+     JOIN organization_user ou ON u.id = ou.user_id
+     LEFT JOIN organizations o ON ou.organization_id = o.id AND o.id = $1
+     LEFT JOIN herds h ON h.owner_id = u.id
+     WHERE ou.organization_id = $1
+     AND ou.role NOT IN (${placeholders})
+     GROUP BY u.id
+     ORDER BY u.last_name, u.first_name`,
+    [organizationId, ...excludedRoles]
+  );
+  return result.rows;
+}
+
+// Pobranie jednego użytkownika (dla Client i Farmer)
+async function getSingleUser(userId, withDetails = true) {
+  let query;
+  
+  if (withDetails) {
+    query = `
+      SELECT u.*, 
+            array_agg(DISTINCT jsonb_build_object(
+              'id', o.id,
+              'name', o.name,
+              'city', o.city,
+              'street', o.street,
+              'house_number', o.house_number,
+              'role', ou.role
+            )) FILTER (WHERE o.id IS NOT NULL) as organizations,
+            array_agg(DISTINCT jsonb_build_object(
+              'id', h.id,
+              'herd_id', h.herd_id,
+              'eval_herd_no', h.eval_herd_no
+            )) FILTER (WHERE h.id IS NOT NULL) as herds
+      FROM users u
+      LEFT JOIN organization_user ou ON u.id = ou.user_id
+      LEFT JOIN organizations o ON ou.organization_id = o.id
+      LEFT JOIN herds h ON h.owner_id = u.id
+      WHERE u.id = $1
+      GROUP BY u.id
+    `;
+  } else {
+    query = 'SELECT * FROM users WHERE id = $1';
+  }
+  
+  const result = await query(query, [userId]);
+  return result.rows[0];
 }
 
 // Dostarczamy obydwie wersje nazw metod dla kompatybilności
@@ -70,5 +193,8 @@ module.exports = {
   create,
   updateUser,
   updatePassword,
-  getAllUsers
+  getAllUsers,
+  getUsersByOrganization,
+  getClientsInOrganization,
+  getSingleUser
 };

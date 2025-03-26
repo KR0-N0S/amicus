@@ -5,59 +5,62 @@ import Card from '../components/common/Card';
 import Table from '../components/common/Table';
 import Button from '../components/common/Button';
 import { useAuth } from '../context/AuthContext';
-import { fetchClients } from '../services/clientService';
+import { fetchClients } from '../api/clientApi';
+import { Client, OrganizationWithRole } from '../types/models';
 import './ClientsList.css';
 
-interface Client {
-  id: number;
-  first_name: string;
-  last_name: string;
-  city: string;
-  street: string;
-  house_number: string;
-  phone: string;
-  email: string;
-  organization_name?: string;
-  organization_city?: string;
-  organization_street?: string;
-  organization_house_number?: string;
-  role?: string;
-}
-
-// Definiujemy interfejs użytkownika, aby uniknąć błędu z właściwością 'role'
+// Interfejs dla danych użytkownika z kontekstu uwierzytelniania
 interface AuthUser {
   id: number;
-  username: string;
-  role: string;
-  // Inne pola użytkownika, które mogą być potrzebne
+  email: string;
+  first_name: string;
+  last_name: string;
+  organizations?: OrganizationWithRole[];
 }
 
+// Komponent listy klientów
 const ClientsList: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const navigate = useNavigate();
-  // Używamy rzutowania typu dla kontekstu uwierzytelniania
+  
+  // Używamy kontekstu uwierzytelniania
   const { user } = useAuth() as { user: AuthUser | null };
+  
+  // Pobieramy ID organizacji z pierwszej organizacji użytkownika
+  const organizationId = user?.organizations?.[0]?.id;
 
+  // Dodajemy debugowanie, aby sprawdzić co zawiera obiekt użytkownika
+  console.log("User data:", user);
+  console.log("Organization ID:", organizationId);
+  
   useEffect(() => {
     const loadClients = async () => {
       try {
         setIsLoading(true);
-        const data = await fetchClients();
-        setClients(data);
-        setError(null);
+        
+        // Jeśli użytkownik jest zalogowany, próbujemy pobrać klientów
+        if (user) {
+          console.log(`Pobieranie klientów dla organizacji: ${organizationId || 'brak'}`);
+          const data = await fetchClients(organizationId ? Number(organizationId) : undefined);
+          console.log("Otrzymane dane klientów:", data);
+          setClients(data);
+          setError(null);
+        } else {
+          setError('Użytkownik nie jest zalogowany.');
+        }
       } catch (err) {
-        setError('Nie udało się pobrać listy klientów. Spróbuj ponownie później.');
         console.error('Error fetching clients:', err);
+        setError('Nie udało się pobrać listy klientów. Spróbuj ponownie później.');
       } finally {
         setIsLoading(false);
       }
     };
 
     loadClients();
-  }, []);
+  }, [organizationId, user]);
 
   // Filtrowanie klientów po wyszukiwanej frazie
   const filteredClients = clients.filter(
@@ -65,11 +68,19 @@ const ClientsList: React.FC = () => {
       client.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.phone.includes(searchTerm)
+      (client.phone && client.phone.includes(searchTerm))
   );
 
+  console.log("Filtered clients:", filteredClients);
+
+  // Sprawdzanie roli użytkownika w organizacji - ignorujemy wielkość liter
+  const userRole = user?.organizations?.find(org => 
+    org.id === Number(organizationId))?.role?.toLowerCase();
+  
+  console.log("User role detected:", userRole);
+  
   // Sprawdzanie, czy użytkownik ma uprawnienia do edycji i usuwania
-  const canEditDelete = user && (user.role === 'Owner' || user.role === 'OfficeStaff');
+  const canEditDelete = userRole === 'owner' || userRole === 'officestaff';
 
   const handleRowClick = (client: Client) => {
     navigate(`/clients/${client.id}`);
@@ -88,19 +99,20 @@ const ClientsList: React.FC = () => {
     }
   };
 
+  // Funkcje obsługi przycisków akcji
   const handleDocumentationClick = (e: React.MouseEvent, clientId: number) => {
     e.stopPropagation();
-    // Tutaj można dodać logikę rozwijania menu lub nawigację do podstrony dokumentacji
+    navigate(`/clients/${clientId}/documents`);
   };
 
   const handleAnimalsClick = (e: React.MouseEvent, clientId: number) => {
     e.stopPropagation();
-    // Tutaj można dodać logikę rozwijania menu lub nawigację do podstrony zwierząt
+    navigate(`/clients/${clientId}/animals`);
   };
 
   const handleBillingClick = (e: React.MouseEvent, clientId: number) => {
     e.stopPropagation();
-    // Tutaj można dodać logikę rozwijania menu lub nawigację do podstrony rozliczeń
+    navigate(`/clients/${clientId}/billing`);
   };
 
   const columns = [
@@ -114,12 +126,13 @@ const ClientsList: React.FC = () => {
       key: 'address', 
       title: 'Adres', 
       sortable: true,
-      render: (client: Client) => `${client.city}, ul. ${client.street} ${client.house_number}`
+      render: (client: Client) => client.city ? `${client.city}, ul. ${client.street || ''} ${client.house_number || ''}` : '-'
     },
     { 
       key: 'phone', 
       title: 'Telefon', 
-      sortable: true 
+      sortable: true,
+      render: (client: Client) => client.phone || '-'
     },
     { 
       key: 'email', 
@@ -131,12 +144,16 @@ const ClientsList: React.FC = () => {
       title: 'Firma', 
       sortable: true,
       render: (client: Client) => {
-        if (client.organization_name) {
-          const orgAddress = client.organization_city && client.organization_street ? 
-            `[${client.organization_city}, ul. ${client.organization_street} ${client.organization_house_number || ''}]` : '';
-          return `${client.organization_name} ${orgAddress}`;
+        // Znajdź organizację, w której klient jest właścicielem
+        // Ignorujemy wielkość liter w roli
+        const ownedOrg = client.organizations?.find(org => 
+          org.role?.toLowerCase() === 'owner');
+        if (ownedOrg) {
+          const orgAddress = ownedOrg.city ? 
+            `[${ownedOrg.city}, ul. ${ownedOrg.street || ''} ${ownedOrg.house_number || ''}]` : '';
+          return `${ownedOrg.name} ${orgAddress}`;
         }
-        return '';
+        return '-';
       }
     },
     {
@@ -197,13 +214,15 @@ const ClientsList: React.FC = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
-      <Button
-        variant="success"
-        icon={<FaUserPlus />}
-        onClick={() => navigate('/clients/add')}
-      >
-        Dodaj klienta
-      </Button>
+      {canEditDelete && (
+        <Button
+          variant="success"
+          icon={<FaUserPlus />}
+          onClick={() => navigate('/clients/add')}
+        >
+          Dodaj klienta
+        </Button>
+      )}
     </div>
   );
 
@@ -220,7 +239,12 @@ const ClientsList: React.FC = () => {
         ) : error ? (
           <div className="error-message">{error}</div>
         ) : filteredClients.length === 0 ? (
-          <div className="empty-message">Brak klientów do wyświetlenia</div>
+          <div className="empty-message">
+            Brak klientów do wyświetlenia
+            {user && <p>Zalogowany jako: {user.email} (ID: {user.id})</p>}
+            {organizationId && <p>Organizacja ID: {organizationId}</p>}
+            {userRole && <p>Rola: {userRole}</p>}
+          </div>
         ) : (
           <Table
             columns={columns}

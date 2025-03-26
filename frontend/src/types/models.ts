@@ -29,6 +29,32 @@ export interface Organization {
   updated_at: string;
 }
 
+// Nowe interfejsy dla danych organizacji z rolą
+export interface OrganizationWithRole {
+  id: number;
+  name: string;
+  city?: string;
+  street?: string;
+  house_number?: string;
+  role: string;
+}
+
+// Interfejs dla stad
+export interface Herd {
+  id: number;
+  herd_id: string;
+  eval_herd_no?: string;
+}
+
+// Rozszerzony interfejs użytkownika z dodatkowymi danymi
+export interface UserWithDetails extends User {
+  organizations?: OrganizationWithRole[];
+  herds?: Herd[];
+}
+
+// Alias dla klienta (dla większej czytelności kodu)
+export interface Client extends UserWithDetails {}
+
 export interface Animal {
   id: number;
   owner_id: number;
@@ -113,5 +139,21 @@ export interface AuthResponse {
     user: User;
     organizations?: Organization[];
     token: string;
+  }
+}
+
+// Nowe interfejsy dla odpowiedzi z API klientów
+export interface ClientsResponse {
+  status: string;
+  results: number;
+  data: {
+    clients: Client[];
+  }
+}
+
+export interface ClientResponse {
+  status: string;
+  data: {
+    client: Client;
   }
 }

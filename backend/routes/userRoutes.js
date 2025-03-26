@@ -1,6 +1,8 @@
 const express = require('express');
 const userController = require('../controllers/userController');
+const clientController = require('../controllers/clientController');
 const { verifyToken } = require('../middleware/authMiddleware');
+const { requireOrganizationMembership } = require('../middleware/roleMiddleware');
 
 const router = express.Router();
 
@@ -85,5 +87,55 @@ router.put('/profile', userController.updateProfile);
  *         description: Brak autentykacji lub nieprawidłowe hasło
  */
 router.post('/change-password', userController.changePassword);
+
+/**
+ * @swagger
+ * /api/users/clients:
+ *   get:
+ *     summary: Pobieranie listy klientów
+ *     tags: [Clients]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: organizationId
+ *         schema:
+ *           type: string
+ *         description: ID organizacji
+ *     responses:
+ *       200:
+ *         description: Lista klientów
+ *       401:
+ *         description: Brak autentykacji
+ */
+router.get('/clients', clientController.getClients);
+
+/**
+ * @swagger
+ * /api/users/clients/{clientId}:
+ *   get:
+ *     summary: Pobieranie szczegółów klienta
+ *     tags: [Clients]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: clientId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID klienta
+ *       - in: query
+ *         name: organizationId
+ *         schema:
+ *           type: string
+ *         description: ID organizacji
+ *     responses:
+ *       200:
+ *         description: Szczegóły klienta
+ *       401:
+ *         description: Brak autentykacji
+ */
+router.get('/clients/:clientId', clientController.getClientById);
 
 module.exports = router;
