@@ -1,4 +1,5 @@
 import axiosInstance from './axios';
+import axios, { AxiosError } from 'axios';
 import { ClientsResponse, ClientResponse, Client } from '../types/models';
 
 export const fetchClients = async (organizationId?: number): Promise<Client[]> => {
@@ -25,10 +26,48 @@ export const fetchClients = async (organizationId?: number): Promise<Client[]> =
 export const fetchClientById = async (clientId: number, organizationId?: number): Promise<Client> => {
   try {
     const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
+    console.log(`Fetching client with ID ${clientId}, params: ${queryParams}`);
+    
     const response = await axiosInstance.get<ClientResponse>(`/users/clients/${clientId}${queryParams}`);
+    console.log('Client API response:', response.data);
     return response.data.data.client;
   } catch (error) {
     console.error(`Error fetching client with ID ${clientId}:`, error);
+    
+    // Dodatkowe logowanie szczegółów błędu
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError;
+      console.error('Error response:', {
+        status: axiosError.response?.status,
+        data: axiosError.response?.data,
+        headers: axiosError.response?.headers
+      });
+    }
+    
+    throw error;
+  }
+};
+
+// Nowa funkcja do deaktywacji klienta
+export const deactivateClient = async (clientId: number, organizationId?: number): Promise<void> => {
+  try {
+    const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
+    console.log(`Deactivating client with ID ${clientId}, params: ${queryParams}`);
+    
+    await axiosInstance.patch(`/users/clients/${clientId}/deactivate${queryParams}`);
+    console.log(`Client ${clientId} successfully deactivated`);
+  } catch (error) {
+    console.error(`Error deactivating client with ID ${clientId}:`, error);
+    
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError;
+      console.error('Error response:', {
+        status: axiosError.response?.status,
+        data: axiosError.response?.data,
+        headers: axiosError.response?.headers
+      });
+    }
+    
     throw error;
   }
 };

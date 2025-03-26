@@ -136,7 +136,7 @@ export interface ApiResponse<T> {
 export interface AuthResponse {
   status: string;
   data: {
-    user: User;
+    user: UserWithDetails; // Zmiana z User na UserWithDetails
     organizations?: Organization[];
     token: string;
   }

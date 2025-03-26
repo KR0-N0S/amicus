@@ -56,6 +56,21 @@ async function updatePassword(id, password) {
   return result.rows[0];
 }
 
+// Nowa funkcja do deaktywacji użytkownika
+async function deactivateUser(userId) {
+  console.log(`[USER_REPO] Deaktywacja użytkownika o ID ${userId}`);
+  
+  const result = await query(
+    `UPDATE users 
+     SET status = 'inactive', updated_at = $1
+     WHERE id = $2 
+     RETURNING *`,
+    [new Date(), userId]
+  );
+  
+  return result.rows[0];
+}
+
 // Pobranie wszystkich użytkowników (dla SuperAdmin)
 async function getAllUsers() {
   const result = await query(
@@ -151,10 +166,10 @@ async function getClientsInOrganization(organizationId, excludedRoles = ['Owner'
 
 // Pobranie jednego użytkownika (dla Client i Farmer)
 async function getSingleUser(userId, withDetails = true) {
-  let query;
+  let sqlQuery; // Zmieniono nazwę zmiennej z 'query' na 'sqlQuery'
   
   if (withDetails) {
-    query = `
+    sqlQuery = `
       SELECT u.*, 
             array_agg(DISTINCT jsonb_build_object(
               'id', o.id,
@@ -177,10 +192,10 @@ async function getSingleUser(userId, withDetails = true) {
       GROUP BY u.id
     `;
   } else {
-    query = 'SELECT * FROM users WHERE id = $1';
+    sqlQuery = 'SELECT * FROM users WHERE id = $1'; // Zmieniono nazwę zmiennej z 'query' na 'sqlQuery'
   }
   
-  const result = await query(query, [userId]);
+  const result = await query(sqlQuery, [userId]); // Zmieniono nazwę zmiennej z 'query' na 'sqlQuery'
   return result.rows[0];
 }
 
@@ -196,5 +211,6 @@ module.exports = {
   getAllUsers,
   getUsersByOrganization,
   getClientsInOrganization,
-  getSingleUser
+  getSingleUser,
+  deactivateUser // Dodajemy nową funkcję do eksportu
 };

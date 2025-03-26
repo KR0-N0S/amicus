@@ -138,4 +138,36 @@ router.get('/clients', clientController.getClients);
  */
 router.get('/clients/:clientId', clientController.getClientById);
 
+/**
+ * @swagger
+ * /api/users/clients/{clientId}/deactivate:
+ *   patch:
+ *     summary: Deaktywacja klienta
+ *     tags: [Clients]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: clientId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID klienta
+ *       - in: query
+ *         name: organizationId
+ *         schema:
+ *           type: string
+ *         description: ID organizacji
+ *     responses:
+ *       200:
+ *         description: Klient został pomyślnie deaktywowany
+ *       401:
+ *         description: Brak autentykacji
+ *       403:
+ *         description: Brak uprawnień
+ *       404:
+ *         description: Klient nie został znaleziony
+ */
+router.patch('/clients/:clientId/deactivate', clientController.deactivateClient);
+
 module.exports = router;
