@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaEdit, FaTrash, FaPrint, FaSync } from 'react-icons/fa';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
+import Modal from '../components/common/Modal';  // Dodane import modala
 import Tabs, { Tab } from '../components/common/Tabs/Tabs';
 import { useAuth } from '../context/AuthContext';
 import { fetchClientById, deactivateClient } from '../api/clientApi';
@@ -30,6 +31,8 @@ const ClientDetails: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState<number>(0);
+  // Dodajemy stan dla modala
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
   const navigate = useNavigate();
   
   // Pobieramy dane użytkownika bezpośrednio z localStorage oraz z kontekstu
@@ -47,10 +50,6 @@ const ClientDetails: React.FC = () => {
   
   // Funkcja pomocnicza sprawdzająca uprawnienia
   const userHasRole = (roles: string[]): boolean => {
-    // Sprawdzenie, czy email to admin@example.com (administrator systemowy)
-    if (user?.email === 'admin@example.com') {
-      return true;
-    }
     
     // Sprawdzenie, czy użytkownik ma organizacje
     if (!user?.organizations || user.organizations.length === 0) {
@@ -114,23 +113,27 @@ const ClientDetails: React.FC = () => {
     navigate(`/clients/${id}/edit`);
   };
 
-  const handleDelete = async () => {
-    if (window.confirm('Czy na pewno chcesz dezaktywować tego klienta?')) {
-      try {
-        setIsLoading(true);
-        await deactivateClient(Number(id));
-        setIsLoading(false);
-        
-        // Pokaż komunikat o sukcesie
-        alert('Klient został pomyślnie dezaktywowany');
-        
-        // Przekierowanie do listy klientów
-        navigate('/clients');
-      } catch (error) {
-        setIsLoading(false);
-        console.error('Error deactivating client:', error);
-        alert('Wystąpił błąd podczas dezaktywacji klienta');
-      }
+  // Aktualizujemy funkcję handleDelete, która teraz tylko otwiera modal
+  const handleDelete = () => {
+    setIsDeleteModalOpen(true);
+  };
+
+  // Dodajemy nową funkcję do obsługi faktycznego usunięcia po potwierdzeniu w modalu
+  const confirmDelete = async () => {
+    try {
+      setIsLoading(true);
+      await deactivateClient(Number(id));
+      setIsLoading(false);
+      
+      // Zamykamy modal
+      setIsDeleteModalOpen(false);
+      
+      // Przekierowanie do listy klientów
+      navigate('/clients');
+    } catch (error) {
+      setIsLoading(false);
+      console.error('Error deactivating client:', error);
+      setError('Wystąpił błąd podczas dezaktywacji klienta');
     }
   };
 
@@ -334,8 +337,37 @@ const ClientDetails: React.FC = () => {
     </Button>
   );
 
+  // Przygotujmy stopkę dla modala
+  const deleteModalFooter = (
+    <>
+      <Button
+        variant="secondary"
+        onClick={() => setIsDeleteModalOpen(false)}
+      >
+        Anuluj
+      </Button>
+      <Button
+        variant="danger"
+        onClick={confirmDelete}
+      >
+        Dezaktywuj
+      </Button>
+    </>
+  );
+
   return (
     <div className="client-details">
+      {/* Modal potwierdzenia dezaktywacji */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Potwierdzenie dezaktywacji"
+        footer={deleteModalFooter}
+      >
+        <p>Czy na pewno chcesz dezaktywować tego klienta? Ta operacja nie może być cofnięta.</p>
+        {client && <p><strong>{client.first_name} {client.last_name}</strong> zostanie dezaktywowany.</p>}
+      </Modal>
+      
       <Card title="Karta klienta" actions={cardActions}>
         {isLoading ? (
           <div className="loading-spinner">Ładowanie danych...</div>

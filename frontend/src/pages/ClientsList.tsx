@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaUserPlus, FaSearch, FaFile, FaPaw, FaMoneyBillWave, FaEdit, FaTrash } from 'react-icons/fa';
+import { FaUserPlus, FaSearch, FaFile, FaPaw, FaMoneyBillWave } from 'react-icons/fa';
 import Card from '../components/common/Card';
 import Table from '../components/common/Table';
 import Button from '../components/common/Button';
@@ -79,24 +79,11 @@ const ClientsList: React.FC = () => {
   
   console.log("User role detected:", userRole);
   
-  // Sprawdzanie, czy użytkownik ma uprawnienia do edycji i usuwania
-  const canEditDelete = userRole === 'owner' || userRole === 'officestaff';
+  // Sprawdzanie, czy użytkownik ma uprawnienia do dodawania klientów
+  const canAddClient = userRole === 'owner' || userRole === 'officestaff';
 
   const handleRowClick = (client: Client) => {
     navigate(`/clients/${client.id}`);
-  };
-
-  const handleEdit = (e: React.MouseEvent, clientId: number) => {
-    e.stopPropagation(); // Zapobiega wywołaniu handleRowClick
-    navigate(`/clients/${clientId}/edit`);
-  };
-
-  const handleDelete = (e: React.MouseEvent, clientId: number) => {
-    e.stopPropagation(); // Zapobiega wywołaniu handleRowClick
-    if (window.confirm('Czy na pewno chcesz usunąć tego klienta?')) {
-      // Tutaj implementacja usuwania klienta przez API
-      console.log('Usuwanie klienta o ID:', clientId);
-    }
   };
 
   // Funkcje obsługi przycisków akcji
@@ -180,22 +167,6 @@ const ClientsList: React.FC = () => {
             tooltip="Rozliczenia"
             variant="primary"
           />
-          {canEditDelete && (
-            <>
-              <Button 
-                icon={<FaEdit />} 
-                onClick={(e) => handleEdit(e, client.id)}
-                tooltip="Edytuj"
-                variant="warning"
-              />
-              <Button 
-                icon={<FaTrash />} 
-                onClick={(e) => handleDelete(e, client.id)}
-                tooltip="Usuń"
-                variant="danger"
-              />
-            </>
-          )}
         </div>
       )
     }
@@ -214,7 +185,7 @@ const ClientsList: React.FC = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
-      {canEditDelete && (
+      {canAddClient && (
         <Button
           variant="success"
           icon={<FaUserPlus />}

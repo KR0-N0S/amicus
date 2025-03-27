@@ -48,16 +48,18 @@ export const fetchClientById = async (clientId: number, organizationId?: number)
   }
 };
 
-// Nowa funkcja do deaktywacji klienta
-export const deactivateClient = async (clientId: number, organizationId?: number): Promise<void> => {
+// Nowa funkcja do tworzenia klienta
+export const createClient = async (clientData: Partial<Client>, organizationId?: number): Promise<Client> => {
   try {
     const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
-    console.log(`Deactivating client with ID ${clientId}, params: ${queryParams}`);
+    console.log(`Creating new client, params: ${queryParams}`, clientData);
     
-    await axiosInstance.patch(`/users/clients/${clientId}/deactivate${queryParams}`);
-    console.log(`Client ${clientId} successfully deactivated`);
+    const response = await axiosInstance.post<ClientResponse>(`/users/clients${queryParams}`, clientData);
+    console.log('Create client API response:', response.data);
+    
+    return response.data.data.client;
   } catch (error) {
-    console.error(`Error deactivating client with ID ${clientId}:`, error);
+    console.error('Error creating client:', error);
     
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError;
@@ -71,3 +73,57 @@ export const deactivateClient = async (clientId: number, organizationId?: number
     throw error;
   }
 };
+
+// Nowa funkcja do aktualizacji klienta
+export const updateClient = async (clientId: number, clientData: Partial<Client>, organizationId?: number): Promise<Client> => {
+  try {
+    const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
+    console.log(`Updating client ${clientId}, params: ${queryParams}`, clientData);
+    
+    const response = await axiosInstance.put<ClientResponse>(`/users/clients/${clientId}${queryParams}`, clientData);
+    console.log('Update client API response:', response.data);
+    
+    return response.data.data.client;
+  } catch (error) {
+    console.error(`Error updating client ${clientId}:`, error);
+    
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError;
+      console.error('Error response:', {
+        status: axiosError.response?.status,
+        data: axiosError.response?.data,
+        headers: axiosError.response?.headers
+      });
+    }
+    
+    throw error;
+  }
+};
+
+// Zmieniona funkcja - teraz służy do usunięcia powiązania klienta z organizacją zamiast dezaktywacji konta
+export const removeClientFromOrganization = async (clientId: number, organizationId?: number): Promise<void> => {
+  try {
+    const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
+    console.log(`Removing client ${clientId} from organization, params: ${queryParams}`);
+    
+    // Nadal używamy tego samego endpointu, ale zmieniamy jego interpretację
+    await axiosInstance.patch(`/users/clients/${clientId}/deactivate${queryParams}`);
+    console.log(`Client ${clientId} successfully removed from organization`);
+  } catch (error) {
+    console.error(`Error removing client ${clientId} from organization:`, error);
+    
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError;
+      console.error('Error response:', {
+        status: axiosError.response?.status,
+        data: axiosError.response?.data,
+        headers: axiosError.response?.headers
+      });
+    }
+    
+    throw error;
+  }
+};
+
+// Dla zachowania kompatybilności wstecznej, zachowujemy stary alias funkcji
+export const deactivateClient = removeClientFromOrganization;

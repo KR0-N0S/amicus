@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { FaSort, FaSortUp, FaSortDown, FaEdit, FaTrash } from 'react-icons/fa';
+import { FaSort, FaSortUp, FaSortDown } from 'react-icons/fa';
 import StatusBadge from './StatusBadge';
 import './Table.css';
 
-const Table = ({ columns, data, onRowClick, actions = true }) => {
+const Table = ({ columns, data, onRowClick }) => {
   const [sortConfig, setSortConfig] = useState({
     key: null,
     direction: 'none'
@@ -79,7 +79,6 @@ const Table = ({ columns, data, onRowClick, actions = true }) => {
                 )}
               </th>
             ))}
-            {actions && <th className="actions-column">Akcje</th>}
           </tr>
         </thead>
         <tbody>
@@ -95,33 +94,11 @@ const Table = ({ columns, data, onRowClick, actions = true }) => {
                     {renderCellContent(item, column)}
                   </td>
                 ))}
-                {actions && (
-                  <td className="actions-cell">
-                    <button 
-                      className="action-button edit"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Implement edit action
-                      }}
-                    >
-                      <FaEdit />
-                    </button>
-                    <button 
-                      className="action-button delete"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Implement delete action
-                      }}
-                    >
-                      <FaTrash />
-                    </button>
-                  </td>
-                )}
               </tr>
             ))
           ) : (
             <tr>
-              <td colSpan={columns.length + (actions ? 1 : 0)} className="no-data">
+              <td colSpan={columns.length} className="no-data">
                 Brak danych
               </td>
             </tr>

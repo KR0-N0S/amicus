@@ -38,16 +38,24 @@ export const AuthProvider = ({ children }) => {
             const response = await getCurrentUserProfile();
             if (response.status === 'success') {
               console.log("Pobrano świeże dane użytkownika z API:", response.data.user);
+              console.log("Pobrano organizacje z API:", response.data.organizations);
+              
+              // Połącz dane użytkownika z organizacjami
+              const userWithOrganizations = {
+                ...response.data.user,
+                organizations: response.data.organizations
+              };
               
               // Log dla debugowania - porównujemy dane
-              if (localUser && JSON.stringify(localUser) !== JSON.stringify(response.data.user)) {
+              if (localUser && JSON.stringify(localUser) !== JSON.stringify(userWithOrganizations)) {
                 console.log("Różnica między danymi z localStorage a API!");
                 console.log("Dane z localStorage:", localUser);
-                console.log("Dane z API:", response.data.user);
+                console.log("Dane z API (z organizacjami):", userWithOrganizations);
               }
               
-              setUser(response.data.user);
-              setCurrentUser(response.data.user); // Aktualizuj dane w localStorage
+              // Aktualizuj stan i localStorage z połączonymi danymi
+              setUser(userWithOrganizations);
+              setCurrentUser(userWithOrganizations);
             }
           }
         } catch (err) {
@@ -120,10 +128,16 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await getCurrentUserProfile();
       if (response.status === 'success') {
-        setUser(response.data.user);
-        setCurrentUser(response.data.user);
+        // Połącz dane użytkownika z organizacjami
+        const userWithOrganizations = {
+          ...response.data.user,
+          organizations: response.data.organizations
+        };
+        
+        setUser(userWithOrganizations);
+        setCurrentUser(userWithOrganizations);
         setLastProfileFetch(Date.now());
-        return response.data.user;
+        return userWithOrganizations;
       }
     } catch (err) {
       console.error('Error refreshing user data:', err);
