@@ -79,6 +79,7 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 2rem;
+  margin-left:2rem;
 }
 
 .info-group h3 {

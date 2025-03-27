@@ -1,15 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaUserPlus, FaSearch, FaFile, FaPaw, FaMoneyBillWave } from 'react-icons/fa';
 import Card from '../components/common/Card';
 import Table from '../components/common/Table';
-import Button from '../components/common/Button';
+import Button from '../components/common/Button'; // Poprawiony import (wcześniej był components.common/Button)
 import { useAuth } from '../context/AuthContext';
 import { fetchClients } from '../api/clientApi';
 import { Client, OrganizationWithRole } from '../types/models';
 import './ClientsList.css';
 
-// Interfejs dla danych użytkownika z kontekstu uwierzytelniania
 interface AuthUser {
   id: number;
   email: string;
@@ -18,7 +17,6 @@ interface AuthUser {
   organizations?: OrganizationWithRole[];
 }
 
-// Komponent listy klientów
 const ClientsList: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -26,83 +24,22 @@ const ClientsList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const navigate = useNavigate();
   
-  // Używamy kontekstu uwierzytelniania
   const { user } = useAuth() as { user: AuthUser | null };
-  
-  // Pobieramy ID organizacji z pierwszej organizacji użytkownika
   const organizationId = user?.organizations?.[0]?.id;
 
-  // Dodajemy debugowanie, aby sprawdzić co zawiera obiekt użytkownika
-  console.log("User data:", user);
-  console.log("Organization ID:", organizationId);
-  
-  useEffect(() => {
-    const loadClients = async () => {
-      try {
-        setIsLoading(true);
-        
-        // Jeśli użytkownik jest zalogowany, próbujemy pobrać klientów
-        if (user) {
-          console.log(`Pobieranie klientów dla organizacji: ${organizationId || 'brak'}`);
-          const data = await fetchClients(organizationId ? Number(organizationId) : undefined);
-          console.log("Otrzymane dane klientów:", data);
-          setClients(data);
-          setError(null);
-        } else {
-          setError('Użytkownik nie jest zalogowany.');
-        }
-      } catch (err) {
-        console.error('Error fetching clients:', err);
-        setError('Nie udało się pobrać listy klientów. Spróbuj ponownie później.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // Używamy memoizacji, żeby nie przeliczać filtrowania przy każdej zmianie stanu
+  const filteredClients = useMemo(() => {
+    return clients.filter(
+      (client) =>
+        client.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (client.phone && client.phone.includes(searchTerm))
+    );
+  }, [clients, searchTerm]);
 
-    loadClients();
-  }, [organizationId, user]);
-
-  // Filtrowanie klientów po wyszukiwanej frazie
-  const filteredClients = clients.filter(
-    (client) =>
-      client.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (client.phone && client.phone.includes(searchTerm))
-  );
-
-  console.log("Filtered clients:", filteredClients);
-
-  // Sprawdzanie roli użytkownika w organizacji - ignorujemy wielkość liter
-  const userRole = user?.organizations?.find(org => 
-    org.id === Number(organizationId))?.role?.toLowerCase();
-  
-  console.log("User role detected:", userRole);
-  
-  // Sprawdzanie, czy użytkownik ma uprawnienia do dodawania klientów
-  const canAddClient = userRole === 'owner' || userRole === 'officestaff';
-
-  const handleRowClick = (client: Client) => {
-    navigate(`/clients/${client.id}`);
-  };
-
-  // Funkcje obsługi przycisków akcji
-  const handleDocumentationClick = (e: React.MouseEvent, clientId: number) => {
-    e.stopPropagation();
-    navigate(`/clients/${clientId}/documents`);
-  };
-
-  const handleAnimalsClick = (e: React.MouseEvent, clientId: number) => {
-    e.stopPropagation();
-    navigate(`/clients/${clientId}/animals`);
-  };
-
-  const handleBillingClick = (e: React.MouseEvent, clientId: number) => {
-    e.stopPropagation();
-    navigate(`/clients/${clientId}/billing`);
-  };
-
-  const columns = [
+  // Memoizacja kolumn – są statyczne, więc nie muszą być przeliczane przy każdym renderze
+  const columns = useMemo(() => [
     { 
       key: 'name', 
       title: 'Imię i Nazwisko', 
@@ -113,7 +50,10 @@ const ClientsList: React.FC = () => {
       key: 'address', 
       title: 'Adres', 
       sortable: true,
-      render: (client: Client) => client.city ? `${client.city}, ul. ${client.street || ''} ${client.house_number || ''}` : '-'
+      render: (client: Client) =>
+        client.city
+          ? `${client.city}, ul. ${client.street || ''} ${client.house_number || ''}`
+          : '-'
     },
     { 
       key: 'phone', 
@@ -131,13 +71,11 @@ const ClientsList: React.FC = () => {
       title: 'Firma', 
       sortable: true,
       render: (client: Client) => {
-        // Znajdź organizację, w której klient jest właścicielem
-        // Ignorujemy wielkość liter w roli
-        const ownedOrg = client.organizations?.find(org => 
-          org.role?.toLowerCase() === 'owner');
+        const ownedOrg = client.organizations?.find(org => org.role?.toLowerCase() === 'owner');
         if (ownedOrg) {
-          const orgAddress = ownedOrg.city ? 
-            `[${ownedOrg.city}, ul. ${ownedOrg.street || ''} ${ownedOrg.house_number || ''}]` : '';
+          const orgAddress = ownedOrg.city
+            ? `[${ownedOrg.city}, ul. ${ownedOrg.street || ''} ${ownedOrg.house_number || ''}]`
+            : '';
           return `${ownedOrg.name} ${orgAddress}`;
         }
         return '-';
@@ -170,9 +108,57 @@ const ClientsList: React.FC = () => {
         </div>
       )
     }
-  ];
+  ], []); // zależności puste, ponieważ kolumny są statyczne
 
-  // Komponent action buttons dla nagłówka karty
+  // Używamy useCallback, by uniknąć zmiany referencji funkcji przy każdym renderze
+  const handleRowClick = useCallback((client: Client) => {
+    navigate(`/clients/${client.id}`);
+  }, [navigate]);
+
+  const handleDocumentationClick = useCallback((e: React.MouseEvent, clientId: number) => {
+    e.stopPropagation();
+    navigate(`/clients/${clientId}/documents`);
+  }, [navigate]);
+
+  const handleAnimalsClick = useCallback((e: React.MouseEvent, clientId: number) => {
+    e.stopPropagation();
+    navigate(`/clients/${clientId}/animals`);
+  }, [navigate]);
+
+  const handleBillingClick = useCallback((e: React.MouseEvent, clientId: number) => {
+    e.stopPropagation();
+    navigate(`/clients/${clientId}/billing`);
+  }, [navigate]);
+
+  useEffect(() => {
+    const loadClients = async () => {
+      try {
+        setIsLoading(true);
+        if (user) {
+          console.log(`Pobieranie klientów dla organizacji: ${organizationId || 'brak'}`);
+          const data = await fetchClients(organizationId ? Number(organizationId) : undefined);
+          console.log("Otrzymane dane klientów:", data);
+          setClients(data);
+          setError(null);
+        } else {
+          setError('Użytkownik nie jest zalogowany.');
+        }
+      } catch (err) {
+        console.error('Error fetching clients:', err);
+        setError('Nie udało się pobrać listy klientów. Spróbuj ponownie później.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadClients();
+  }, [organizationId, user]);
+
+  const userRole = user?.organizations?.find(org =>
+    org.id === Number(organizationId))?.role?.toLowerCase();
+
+  const canAddClient = userRole === 'owner' || userRole === 'officestaff';
+
   const cardActions = (
     <div className="card-actions">
       <div className="search-container">
@@ -200,11 +186,7 @@ const ClientsList: React.FC = () => {
   return (
     <div className="clients-list">
       <h1 className="page-title">Lista klientów</h1>
-
-      <Card 
-        title="Klienci" 
-        actions={cardActions}
-      >
+      <Card title="Klienci" actions={cardActions}>
         {isLoading ? (
           <div className="loading-spinner">Ładowanie danych...</div>
         ) : error ? (
@@ -217,11 +199,14 @@ const ClientsList: React.FC = () => {
             {userRole && <p>Rola: {userRole}</p>}
           </div>
         ) : (
-          <Table
-            columns={columns}
-            data={filteredClients}
-            onRowClick={handleRowClick}
-          />
+          // Rozszerzenie tabeli do pełnej szerokości rodzica
+          <div style={{ width: '100%' }}>
+            <Table
+              columns={columns}
+              data={filteredClients}
+              onRowClick={handleRowClick}
+            />
+          </div>
         )}
       </Card>
     </div>

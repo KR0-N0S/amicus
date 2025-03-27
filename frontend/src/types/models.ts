@@ -52,8 +52,23 @@ export interface UserWithDetails extends User {
   herds?: Herd[];
 }
 
-// Alias dla klienta (dla większej czytelności kodu)
-export interface Client extends UserWithDetails {}
+// Rozszerzony interfejs klienta z dodatkowymi polami formularza
+export interface Client extends UserWithDetails {
+  // Pola dla formularza dotyczące firmy
+  has_company?: boolean;
+  company_name?: string;
+  company_tax_id?: string;
+  company_street?: string;
+  company_house_number?: string;
+  company_city?: string;
+  company_postal_code?: string;
+  
+  // Pola dla formularza dotyczące gospodarstwa rolnego
+  has_farm?: boolean;
+  farm_name?: string;
+  herd_registration_number?: string;
+  herd_evaluation_number?: string;
+}
 
 export interface Animal {
   id: number;
@@ -142,7 +157,7 @@ export interface AuthResponse {
   }
 }
 
-// Nowe interfejsy dla odpowiedzi z API klientów
+// Interfejsy dla odpowiedzi z API klientów
 export interface ClientsResponse {
   status: string;
   results: number;

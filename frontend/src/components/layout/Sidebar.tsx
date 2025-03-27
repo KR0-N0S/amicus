@@ -39,10 +39,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
 
   const toggleSubmenu = (menuKey: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setExpandedMenus(prev => ({
-      ...prev,
-      [menuKey]: !prev[menuKey],
-    }));
+    setExpandedMenus(prev => {
+      if (prev[menuKey]) {
+        // Jeśli kliknięty submenu jest już otwarty, zamykamy go
+        return {};
+      } else {
+        // Zamykamy wszystkie inne i otwieramy tylko wybrany submenu
+        return { [menuKey]: true };
+      }
+    });
   };
 
   const handleAddNew = (path: string, e: React.MouseEvent) => {

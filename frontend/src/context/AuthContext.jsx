@@ -92,11 +92,19 @@ export const AuthProvider = ({ children }) => {
       const response = await loginUser({ email, password });
       
       if (response.status === 'success') {
-        // Dodatkowy log dla debugowania
-        console.log("Zalogowano pomyślnie, dane użytkownika:", response.data.user);
-        console.log("Organizacje użytkownika po zalogowaniu:", response.data.user.organizations);
+        // KLUCZOWA ZMIANA: Prawidłowe łączenie użytkownika z jego organizacjami
+        const userWithOrganizations = {
+          ...response.data.user,
+          organizations: response.data.organizations || []
+        };
         
-        setUser(response.data.user);
+        // Dodatkowy log dla debugowania
+        console.log("Zalogowano pomyślnie, dane użytkownika:", userWithOrganizations);
+        console.log("Organizacje użytkownika po zalogowaniu:", userWithOrganizations.organizations);
+        
+        // Zapisujemy połączone dane do stanu i localStorage
+        setUser(userWithOrganizations);
+        setCurrentUser(userWithOrganizations);
         setLastProfileFetch(Date.now());
         return true;
       } else {

@@ -48,16 +48,113 @@ export const fetchClientById = async (clientId: number, organizationId?: number)
   }
 };
 
-// Nowa funkcja do tworzenia klienta
-export const createClient = async (clientData: Partial<Client>, organizationId?: number): Promise<Client> => {
+// Zmodyfikowana funkcja do tworzenia klienta za pomocą endpointu rejestracji
+export const createClient = async (userData: Partial<Client>, organizationId?: number): Promise<Client> => {
   try {
-    const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
-    console.log(`Creating new client, params: ${queryParams}`, clientData);
+    console.log('Creating new client via registration endpoint');
+    console.log('Client data:', userData);
+    console.log('Organization ID:', organizationId);
     
-    const response = await axiosInstance.post<ClientResponse>(`/users/clients${queryParams}`, clientData);
-    console.log('Create client API response:', response.data);
+    // Przygotowanie danych do rejestracji
+    const registerData: any = {
+      // Dane osobowe
+      email: userData.email,
+      password: generateTemporaryPassword(), // Generowanie tymczasowego hasła
+      first_name: userData.first_name,
+      last_name: userData.last_name,
+      phone: userData.phone || '',
+      street: userData.street || '',
+      house_number: userData.house_number || '',
+      city: userData.city || '',
+      postal_code: userData.postal_code || '',
+      tax_id: userData.tax_id || '',
+      
+      // Określamy rolę klienta w zależności od tego, czy posiada gospodarstwo
+      role: userData.has_farm ? 'farmer' : 'client'
+    };
     
-    return response.data.data.client;
+    // Dodajemy dane organizacji, jeśli klient posiada firmę
+    if (userData.has_company) {
+      registerData.organization = {
+        name: userData.company_name,
+        tax_id: userData.company_tax_id || userData.tax_id,
+        city: userData.company_city || userData.city,
+        street: userData.company_street || userData.street,
+        house_number: userData.company_house_number || userData.house_number,
+        postal_code: userData.company_postal_code || userData.postal_code
+      };
+    }
+    
+    // Dodajemy dane o stadzie, jeśli podano
+    if (userData.has_farm) {
+      registerData.herd = {
+        name: userData.farm_name || `Gospodarstwo ${userData.last_name}`,
+        registration_number: userData.herd_registration_number,
+        evaluation_number: userData.herd_evaluation_number || null
+      };
+    }
+
+    console.log('Registration data being sent to API:', registerData);
+
+    // Wywołujemy endpoint rejestracji
+    const response = await axiosInstance.post<{
+      status: string;
+      data: {
+        user: Client;
+        organization?: any;
+        token: string;
+      }
+    }>('/auth/register', registerData);
+    
+    console.log('Client registration API response:', response.data);
+    
+    const newClient = response.data.data.user;
+    
+    // Jeśli organizationId jest dostępne i klient został utworzony, 
+    // dodajemy klienta do organizacji przez odpowiedni endpoint
+    if (organizationId && (!newClient.organizations || newClient.organizations.length === 0)) {
+      try {
+        console.log(`Dodawanie klienta ${newClient.id} do organizacji ${organizationId}`);
+        
+        // Używamy prawidłowego endpointu API do dodania użytkownika do organizacji
+        const addToOrgResponse = await axiosInstance.post('/organizations/users', {
+          organizationId: organizationId,
+          userId: newClient.id,
+          role: 'client'
+        });
+        
+        console.log('Odpowiedź po dodaniu do organizacji:', addToOrgResponse.data);
+        
+        // Pobieramy zaktualizowane dane klienta
+        return await fetchClientById(newClient.id, organizationId);
+      } catch (linkError) {
+        console.error('Błąd podczas dodawania klienta do organizacji:', linkError);
+        
+        if (axios.isAxiosError(linkError)) {
+          console.error('Szczegóły błędu:', {
+            status: linkError.response?.status,
+            data: linkError.response?.data
+          });
+        }
+      }
+    }
+    
+    // DODAJEMY: Zapisujemy ID nowo utworzonego klienta w localStorage
+    localStorage.setItem('recentlyCreatedClientId', String(newClient.id));
+    
+    // Żeby ułatwić dostęp do klienta, ustawiamy też ID jego organizacji
+    if (organizationId) {
+      localStorage.setItem(`client_${newClient.id}_organizationId`, String(organizationId));
+    }
+    
+    // Po 5 minutach usuwamy te dane
+    setTimeout(() => {
+      localStorage.removeItem('recentlyCreatedClientId');
+      localStorage.removeItem(`client_${newClient.id}_organizationId`);
+    }, 5 * 60 * 1000);
+    
+    // Zwracamy dane utworzonego użytkownika
+    return newClient;
   } catch (error) {
     console.error('Error creating client:', error);
     
@@ -74,7 +171,20 @@ export const createClient = async (clientData: Partial<Client>, organizationId?:
   }
 };
 
-// Nowa funkcja do aktualizacji klienta
+// Funkcja pomocnicza do generowania tymczasowego hasła
+function generateTemporaryPassword(): string {
+  // Generuje losowe hasło o długości 12 znaków
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+  let password = '';
+  
+  for (let i = 0; i < 12; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  
+  return password;
+}
+
+// Funkcja do aktualizacji klienta pozostaje bez zmian
 export const updateClient = async (clientId: number, clientData: Partial<Client>, organizationId?: number): Promise<Client> => {
   try {
     const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
