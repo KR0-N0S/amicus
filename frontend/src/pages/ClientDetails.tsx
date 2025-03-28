@@ -27,23 +27,30 @@ interface AuthUser {
 }
 
 const checkAccessToClient = (clientData: Client, currentUser: any): boolean => {
-  if (!currentUser || !clientData) return false;
+  if (!currentUser || !clientData) {
+    console.log('Missing user or client data');
+    return false;
+  }
   
-  console.log('Client data received from API:', clientData);
-  console.log('Current user data:', currentUser);
+  console.log('Checking access for client:', {
+    id: clientData.id, 
+    name: `${clientData.first_name} ${clientData.last_name}`,
+    status: clientData.status,
+    organizations: clientData.organizations
+  });
   
+  console.log('Current user:', {
+    id: currentUser.id,
+    organizations: currentUser.organizations
+  });
+  
+  // 1. Jeśli użytkownik przegląda swoje własne dane - ma dostęp
   if (currentUser.id === clientData.id) {
     console.log('User is viewing their own data - access granted');
     return true;
   }
   
-  if (currentUser.organizations && currentUser.organizations.some((org: OrganizationWithRole) => 
-    ['owner', 'superadmin', 'officestaff', 'admin'].includes(org.role?.toLowerCase())
-  )) {
-    console.log('User has administrative role - access granted');
-    return true;
-  }
-  
+  // 2. Sprawdź niedawno utworzonych klientów (to jest wcześniej niż sprawdzanie organizacji)
   const recentlyCreatedClientId = localStorage.getItem('recentlyCreatedClientId');
   const storedOrgId = localStorage.getItem(`client_${clientData.id}_organizationId`);
   
@@ -57,6 +64,19 @@ const checkAccessToClient = (clientData: Client, currentUser: any): boolean => {
     return true;
   }
   
+  // 3. Jeśli użytkownik ma rolę administratora w JAKIEJKOLWIEK organizacji, ma dostęp do wszystkich klientów
+  // To może być zbyt szerokie, ale na razie sprawdźmy czy to rozwiąże problem
+  const hasAdminRole = currentUser.organizations && currentUser.organizations.some((org: OrganizationWithRole) => 
+    ['owner', 'superadmin', 'officestaff', 'admin'].includes(org.role?.toLowerCase())
+  );
+  
+  if (hasAdminRole) {
+    console.log('User has administrative role - access granted');
+    // To może być zbyt permisywne, ale sprawdźmy czy to rozwiąże problem
+    return true;
+  }
+  
+  // 4. Sprawdź powiązania organizacyjne - bardziej szczegółowa weryfikacja
   if (!currentUser.organizations || !clientData.organizations) {
     console.log('Missing organization data', {
       userOrgs: currentUser.organizations,
@@ -65,17 +85,49 @@ const checkAccessToClient = (clientData: Client, currentUser: any): boolean => {
     return false;
   }
   
+  // 5. Sprawdź czy klient i użytkownik należą do tych samych organizacji
   for (const userOrg of currentUser.organizations) {
-    const clientBelongsToOrg = clientData.organizations.some(clientOrg => clientOrg.id === userOrg.id);
-    if (clientBelongsToOrg) {
-      if (['owner', 'superadmin', 'officestaff', 'employee', 'inseminator', 'vettech', 'vet', 'admin']
-          .includes(userOrg.role?.toLowerCase())) {
-        console.log('User has correct role in client\'s organization - access granted');
+    // Dodajmy więcej logowania
+    console.log(`Checking user's org: ${userOrg.id} (${userOrg.name}) with role: ${userOrg.role}`);
+    
+    // Sprawdź, czy klient należy do tej samej organizacji co użytkownik
+    const matchingClientOrgs = clientData.organizations.filter(
+      clientOrg => clientOrg.id === userOrg.id
+    );
+    
+    if (matchingClientOrgs.length > 0) {
+      console.log(`Client belongs to org: ${userOrg.id} with roles:`, 
+        matchingClientOrgs.map(org => org.role)
+      );
+      
+      const userRoleLower = userOrg.role?.toLowerCase() || '';
+      
+      // Jeśli użytkownik ma rolę administracyjną w organizacji klienta
+      if (['owner', 'superadmin', 'officestaff', 'admin'].includes(userRoleLower)) {
+        console.log(`User has admin role ${userRoleLower} in client's organization - access granted`);
         return true;
+      }
+      
+      // Sprawdź role pracowników, którzy mogą mieć dostęp do klientów
+      if (['employee', 'inseminator', 'vettech', 'vet'].includes(userRoleLower)) {
+        // Sprawdź rolę klienta w tej organizacji
+        const clientRoles = matchingClientOrgs.map(org => org.role?.toLowerCase() || '');
+        console.log('Client roles in this organization:', clientRoles);
+        
+        // Sprawdź zarówno "client" jak i "farmer" oraz inne możliwe warianty (dodane case insensitive)
+        const isClientOrFarmer = clientRoles.some(role => 
+          ['client', 'farmer', 'klient', 'rolnik'].includes(role.toLowerCase())
+        );
+        
+        if (isClientOrFarmer) {
+          console.log('User is allowed to view this client based on roles - access granted');
+          return true;
+        }
       }
     }
   }
   
+  // Nie znaleziono żadnego pasującego warunku dostępu
   console.log('Access denied - user does not have required permissions');
   return false;
 };
@@ -268,16 +320,20 @@ const ClientDetails: React.FC = () => {
     </div>
   );
   
-  if (isLoading) {
-    return (
-      <div className="client-details">
-        <Card title="Karta klienta" actions={cardActions}>
-          <div className="loading-spinner">Ładowanie danych...</div>
-        </Card>
-      </div>
-    );
-  }
-
+  // Komponent do wyświetlania błędów z możliwością ponownej próby
+  const ErrorView = ({ message, onRetry }: { message: string, onRetry: () => void }) => (
+    <div className="error-container">
+      <div className="error-message">{message}</div>
+      <Button 
+        variant="primary"
+        icon={<FaSync />}
+        onClick={onRetry}
+      >
+        Spróbuj ponownie
+      </Button>
+    </div>
+  );
+  
   if (error) {
     return (
       <div className="client-details">

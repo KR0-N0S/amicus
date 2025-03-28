@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   FaHome,
@@ -17,6 +17,7 @@ import './Sidebar.css';
 
 interface SidebarProps {
   isOpen: boolean;
+  onLinkClick?: () => void;
 }
 
 interface MenuItem {
@@ -32,22 +33,35 @@ interface MenuItem {
   }>;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onLinkClick }) => {
   const [expandedMenus, setExpandedMenus] = useState<{ [key: string]: boolean }>({});
-  const [hoveredItem, setHoveredItem] = useState<number | null>(null);
   const navigate = useNavigate();
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // Czyścimy rozwinięte menu przy zamknięciu sidebaru
+  useEffect(() => {
+    if (!isOpen) {
+      setExpandedMenus({});
+    }
+  }, [isOpen]);
+
+  // Jeśli sidebar jest zamknięty i klikniemy poza nim – zamyka rozwinięte podmenu
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (!isOpen && sidebarRef.current && !sidebarRef.current.contains(e.target as Node)) {
+        setExpandedMenus({});
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
 
   const toggleSubmenu = (menuKey: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setExpandedMenus(prev => {
-      if (prev[menuKey]) {
-        // Jeśli kliknięty submenu jest już otwarty, zamykamy go
-        return {};
-      } else {
-        // Zamykamy wszystkie inne i otwieramy tylko wybrany submenu
-        return { [menuKey]: true };
-      }
-    });
+    // Niezależnie od stanu sidebaru – zamykamy wszystkie submenu i otwieramy tylko kliknięty
+    setExpandedMenus(prev => ({ [menuKey]: !prev[menuKey] }));
   };
 
   const handleAddNew = (path: string, e: React.MouseEvent) => {
@@ -131,17 +145,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
     },
   ];
 
+  // Funkcja pomocnicza wywołująca onLinkClick tylko na mobile
+  const handleLinkClick = () => {
+    if (window.innerWidth < 768 && onLinkClick) {
+      onLinkClick();
+    }
+  };
+
   return (
-    <div className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
+    <div ref={sidebarRef} className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
       <div className="sidebar-header">{isOpen && <h2 className="app-logo">AmicusApp</h2>}</div>
       <nav className="sidebar-nav">
         <ul>
           {menuItems.map((item, index) => (
-            <li
-              key={index}
-              onMouseEnter={() => setHoveredItem(index)}
-              onMouseLeave={() => setHoveredItem(null)}
-            >
+            <li key={index}>
               {item.submenu ? (
                 <>
                   <div
@@ -156,13 +173,14 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
                       </span>
                     )}
                   </div>
-                  {(expandedMenus[item.submenuKey!] || (!isOpen && hoveredItem === index)) && (
+                  {expandedMenus[item.submenuKey!] && (
                     <ul className={`submenu ${!isOpen ? 'floating' : ''}`}>
                       {item.items &&
                         item.items.map((subItem, subIndex) => (
                           <li key={subIndex} className="submenu-item-container">
                             <NavLink
                               to={subItem.path}
+                              onClick={handleLinkClick}
                               className={({ isActive }) => (isActive ? 'submenu-item active' : 'submenu-item')}
                             >
                               {subItem.title}
@@ -184,6 +202,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
               ) : (
                 <NavLink
                   to={item.path!}
+                  onClick={handleLinkClick}
                   className={({ isActive }) => `menu-item ${isActive ? 'active' : ''}`}
                 >
                   <span className="icon">{item.icon}</span>

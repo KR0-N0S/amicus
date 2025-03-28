@@ -74,11 +74,36 @@ export interface Animal {
   id: number;
   owner_id: number;
   animal_number: string;
+  identifier?: string;       // Numer kolczyka lub chip
   age?: number;
-  sex?: 'male' | 'female';
+  sex?: 'male' | 'female' | 'unknown';
   breed?: string;
+  species: string;
+  animal_type: 'small' | 'large';
+  birth_date?: string;
   photo?: string;
   created_at: string;
+  
+  // Dodatkowe pola, których brakuje
+  name?: string;
+  weight?: number;
+  microchip_number?: string;
+  notes?: string;
+  organization_id?: number;
+  
+  // Pola dla zwierząt domowych (small)
+  color?: string;
+  is_sterilized?: boolean;
+  sterilization_date?: string;
+  special_markings?: string;
+  temperament?: string;
+  special_needs?: string;
+  
+  // Pola dla zwierząt gospodarskich (large)
+  herd_number?: string;
+  registration_date?: string;
+  origin?: string;
+  vaccination_status?: string;
 }
 
 export interface Bull {

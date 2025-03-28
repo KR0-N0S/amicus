@@ -56,54 +56,126 @@ html, body {
 /* Media query dla mniejszych ekranów – sidebar zwinięty */
 @media (max-width: 768px) {
   :root {
-    --sidebar-width: 60px;
+    --sidebar-width: 80vw; /* Sidebar zajmuje dokładnie 80% szerokości ekranu */
   }
-  
+
   .sidebar {
+    transform: translateX(-100%); /* Domyślnie ukryty */
     width: var(--sidebar-width);
   }
-  
+
+  .sidebar.open {
+    transform: translateX(0); /* Widoczny po otwarciu */
+  }
+
   .content-wrapper {
-    margin-left: var(--sidebar-width);
+    margin-left: 0; /* Zawartość nie przesuwa się */
+    transition: transform 0.3s ease, filter 0.3s ease;
   }
-  
+
+  .content-wrapper.content-pushed {
+    transform: translateX(var(--sidebar-width));
+  }
+
+  /* Dodany overlay dla .main-content, aby cały obszar (wraz z paddingiem) był przyciemniony */
+  .content-wrapper.content-pushed .main-content {
+    position: relative;
+  }
+  .content-wrapper.content-pushed .main-content::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    z-index: 1;
+  }
+
   .topbar {
+    left: 0; /* Topbar dopasowany do ekranu */
+  }
+
+  /* Dodane: zmiana tła topbara przy rozwiniętym sidebarze */
+  .content-wrapper.content-pushed .topbar {
+    background-color: #7c7c7d;
+  }
+
+  .mobile-overlay {
+    display: block;
+    position: fixed;
+    top: 0;
     left: var(--sidebar-width);
+    width: calc(100% - var(--sidebar-width));
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 800;
   }
-}
-@media (max-width: 768px) {
-  :root {
-    --sidebar-width: 60px;
-  }
-  
-  .sidebar {
-    width: var(--sidebar-width);
-  }
-  
-  .content-wrapper {
-    margin-left: var(--sidebar-width);
-  }
-  
-  .topbar {
-    left: var(--sidebar-width);
+
+  .main-content {
+    padding: 0px;
   }
 }
 
-/* Media query dla telefonów (max-width: 576px) - ukrywamy sidebar */
+/* Media query dla telefonów (max-width: 576px) */
 @media (max-width: 576px) {
   :root {
-    --sidebar-width: 0;
+    --sidebar-width: 80vw; /* Sidebar zajmuje dokładnie 80% szerokości ekranu */
   }
-  
+
   .sidebar {
-    display: none;
+    transform: translateX(-100%); /* Domyślnie ukryty */
+    width: var(--sidebar-width);
   }
-  
+
+  .sidebar.open {
+    transform: translateX(0); /* Widoczny po otwarciu */
+  }
+
   .content-wrapper {
-    margin-left: 0;
+    margin-left: 0; /* Zawartość nie przesuwa się */
+    transition: transform 0.3s ease, filter 0.3s ease;
   }
-  
-  .topbar {
+
+  .content-wrapper.content-pushed {
+    transform: translateX(var(--sidebar-width));
+  }
+
+  /* Dodany overlay dla .main-content, aby cały obszar (wraz z paddingiem) był przyciemniony */
+  .content-wrapper.content-pushed .main-content {
+    position: relative;
+  }
+  .content-wrapper.content-pushed .main-content::before {
+    content: "";
+    position: absolute;
+    top: 0;
     left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .topbar {
+    left: 0; /* Topbar dopasowany do ekranu */
+  }
+
+  /* Dodane: zmiana tła topbara przy rozwiniętym sidebarze */
+  .content-wrapper.content-pushed .topbar {
+    background-color: #7c7c7d;
+  }
+
+  .mobile-overlay {
+    /* Dziedziczy te same style z max-width:768px */
+    display: block;
+    position: fixed;
+    top: 0;
+    left: var(--sidebar-width);
+    width: calc(100% - var(--sidebar-width));
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 800;
   }
 }

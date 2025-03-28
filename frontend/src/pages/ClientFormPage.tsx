@@ -15,6 +15,13 @@ interface ClientFormParams {
   [key: string]: string | undefined;
 }
 
+// Dodaję interfejs dla organizacji, jeśli nie jest zdefiniowany w types/models
+interface Organization {
+  id: number;
+  role: string;
+  [key: string]: any;
+}
+
 const ClientFormPage: React.FC = () => {
   const { id } = useParams<ClientFormParams>();
   const isEditMode = id !== 'new' && id !== undefined;
@@ -43,13 +50,15 @@ const ClientFormPage: React.FC = () => {
           ? user.organizations[0].id
           : undefined;
           
+        console.log(`Pobieranie danych klienta ID ${id} dla organizacji ${organizationId}`);  
         const data = await fetchClientById(Number(id), organizationId);
+        console.log('Otrzymane dane klienta:', data);
         
         // Sprawdź uprawnienia do tego klienta
         const hasAccess = checkAccessToClient(data, user);
         
         if (!hasAccess) {
-          console.error('Access denied to client data');
+          console.log('Access denied to client data');
           // Zamiast ustawiać flagę braku dostępu, przekierowujemy do listy klientów
           navigate('/clients');
           return;
@@ -87,34 +96,62 @@ const ClientFormPage: React.FC = () => {
   
   // Funkcja sprawdzająca uprawnienia użytkownika do oglądania/edycji danego klienta
   const checkAccessToClient = (clientData: Client, currentUser: any): boolean => {
-    if (!currentUser || !clientData) return false;
+    if (!currentUser || !clientData) {
+      console.log('checkAccessToClient: Brak danych użytkownika lub klienta');
+      return false;
+    }
+    
+    // Dodajemy więcej logów, aby zdiagnozować problem
+    console.log('Sprawdzanie dostępu:');
+    console.log('- ID bieżącego użytkownika:', currentUser.id);
+    console.log('- ID klienta:', clientData.id);
+    console.log('- Rola bieżącego użytkownika:', currentUser.organizations?.[0]?.role);
     
     // Jeśli użytkownik przegląda swoje własne dane - zawsze ma dostęp
     if (currentUser.id === clientData.id) {
+      console.log('Dostęp przyznany: Użytkownik przegląda własne dane');
       return true;
     }
     
     // Sprawdź role użytkownika w organizacjach
-    if (!currentUser.organizations || !clientData.organizations) {
+    if (!currentUser.organizations) {
+      console.log('Dostęp odrzucony: Brak informacji o organizacjach użytkownika');
       return false;
     }
     
-    // Sprawdź, czy użytkownik ma rolę admin/owner w organizacji, do której należy klient
-    const userOrgs = currentUser.organizations;
+    // Najpierw sprawdź, czy użytkownik ma rolę superadmina w jakiejkolwiek organizacji
+    if (currentUser.organizations.some((org: Organization) => org.role?.toLowerCase() === 'superadmin')) {
+      console.log('Dostęp przyznany: Użytkownik jest superadminem');
+      return true;
+    }
     
-    for (const userOrg of userOrgs) {
-      const clientBelongsToOrg = clientData.organizations.some(clientOrg => 
-        clientOrg.id === userOrg.id
-      );
+    // Potem sprawdź czy użytkownik ma rolę owner/officestaff
+    const userHasAdminRole = currentUser.organizations.some((org: Organization) => 
+      ['owner', 'officestaff'].includes(org.role?.toLowerCase())
+    );
+    
+    if (userHasAdminRole) {
+      console.log('Dostęp przyznany: Użytkownik jest właścicielem lub pracownikiem biura');
+      return true;
+    }
+    
+    // Sprawdź, czy użytkownik ma inną rolę w organizacji, do której należy klient
+    if (clientData.organizations) {
+      const userOrgs = currentUser.organizations;
       
-      if (clientBelongsToOrg) {
-        // Sprawdź, czy użytkownik ma odpowiednią rolę w tej organizacji
-        if (['owner', 'superadmin', 'officestaff'].includes(userOrg.role.toLowerCase())) {
+      for (const userOrg of userOrgs) {
+        const clientBelongsToOrg = clientData.organizations.some(clientOrg => 
+          clientOrg.id === userOrg.id
+        );
+        
+        if (clientBelongsToOrg) {
+          console.log('Dostęp przyznany: Użytkownik i klient należą do tej samej organizacji');
           return true;
         }
       }
     }
     
+    console.log('Dostęp odrzucony: Brak wystarczających uprawnień');
     return false;
   };
   

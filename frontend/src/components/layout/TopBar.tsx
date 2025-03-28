@@ -70,9 +70,24 @@ const TopBar: React.FC<TopBarProps> = ({ toggleSidebar, sidebarOpen, darkMode, t
   const userName = user ? (user.first_name || user.email) : 'Użytkownik';
 
   return (
-    <div className="topbar">
+    <div
+      className="topbar"
+      onClick={() => {
+        if (window.innerWidth < 768 && sidebarOpen) {
+          toggleSidebar();
+        }
+      }}
+    >
       <div className="topbar-left">
-        <button className="menu-toggle" onClick={toggleSidebar}>
+        <button
+          className="menu-toggle"
+          onClick={toggleSidebar}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowLeft' && sidebarOpen) {
+              toggleSidebar();
+            }
+          }}
+        >
           {sidebarOpen ? <FaChevronLeft /> : <FaBars />}
         </button>
 

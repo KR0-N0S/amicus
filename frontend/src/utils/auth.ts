@@ -3,6 +3,7 @@ import { jwtDecode } from 'jwt-decode';
 interface DecodedToken {
   id: number;
   exp: number;
+  organizations?: Array<{ id: string; role: string }>;
 }
 
 // Zapisywanie tokenu po zalogowaniu (tylko access token)
@@ -13,6 +14,19 @@ export const setToken = (token: string): void => {
 // Pobieranie tokenu do zapytań
 export const getToken = (): string | null => {
   return localStorage.getItem('token');
+};
+
+// Funkcja do dekodowania tokenu JWT
+export const getDecodedToken = (): DecodedToken | null => {
+  const token = getToken();
+  if (!token) return null;
+  
+  try {
+    return jwtDecode<DecodedToken>(token);
+  } catch (error) {
+    console.error('Błąd dekodowania tokenu:', error);
+    return null;
+  }
 };
 
 // Sprawdzenie czy użytkownik jest zalogowany
@@ -36,6 +50,18 @@ export const isAuthenticated = (): boolean => {
     localStorage.removeItem('user');
     return false;
   }
+};
+
+// Funkcja weryfikująca spójność danych użytkownika z tokenem
+export const verifyUserDataConsistency = (): boolean => {
+  const userData = getCurrentUser();
+  const decodedToken = getDecodedToken();
+  
+  // Jeśli brakuje danych, nie możemy zweryfikować
+  if (!userData || !decodedToken) return false;
+  
+  // Kluczowa weryfikacja: czy ID użytkownika z tokenu zgadza się z danymi w localStorage
+  return decodedToken.id.toString() === userData.id.toString();
 };
 
 // Wylogowanie - teraz również czyści refresh token przez API

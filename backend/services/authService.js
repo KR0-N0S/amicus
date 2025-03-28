@@ -2,13 +2,25 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const userRepository = require('../repositories/userRepository');
 const organizationRepository = require('../repositories/organizationRepository');
+const herdRepository = require('../repositories/herdRepository');
 
 class AuthService {
-  async register(userData, organizationData = null) {
+  async register(userData, organizationData = null, herdData = null, addToOrganizationId = null, userRole = 'client') {
+    console.log('[AUTH_SERVICE] Rozpoczęcie rejestracji użytkownika:', userData.email);
+    console.log('[AUTH_SERVICE] Dodanie do organizacji:', addToOrganizationId);
+    
     // Sprawdź, czy użytkownik o takim emailu już istnieje
     const existingUser = await userRepository.findByEmail(userData.email);
     if (existingUser) {
       throw new Error('Użytkownik o takim adresie email już istnieje');
+    }
+
+    // Sprawdź, czy podany numer stada już istnieje w systemie (jeśli podano)
+    if (herdData && herdData.registration_number) {
+      const herdExists = await herdRepository.checkHerdRegistrationNumberExists(herdData.registration_number);
+      if (herdExists) {
+        throw new Error('Gospodarstwo o podanym numerze rejestracyjnym już istnieje w systemie');
+      }
     }
 
     // Hashuj hasło
@@ -20,20 +32,62 @@ class AuthService {
 
     // Utwórz użytkownika
     const newUser = await userRepository.create(userData);
+    console.log('[AUTH_SERVICE] Utworzono nowego użytkownika, ID:', newUser.id);
 
     let organizationResult = null;
     
     // Jeśli przekazano dane organizacji, utwórz ją i przypisz użytkownika jako administratora
     if (organizationData && organizationData.name) {
+      console.log('[AUTH_SERVICE] Tworzenie organizacji:', organizationData.name);
       const newOrganization = await organizationRepository.create(organizationData);
       await organizationRepository.addUserToOrganization(newOrganization.id, newUser.id, 'owner');
       organizationResult = newOrganization;
+      console.log('[AUTH_SERVICE] Utworzono organizację, ID:', newOrganization.id);
     }
 
-    // Pobierz wszystkie organizacje i role użytkownika
-    const userOrganizations = organizationResult 
-      ? [{ id: organizationResult.id, role: 'owner' }] 
-      : [];
+    // Dodajemy obsługę tworzenia gospodarstwa rolnego
+    let herdResult = null;
+    if (herdData && herdData.registration_number) {
+      console.log('[AUTH_SERVICE] Tworzenie gospodarstwa rolnego:', herdData.registration_number);
+      // Dodajemy identyfikator właściciela (użytkownika) do danych gospodarstwa
+      const herdToCreate = {
+        ...herdData,
+        owner_id: newUser.id,
+        owner_type: 'user',
+      };
+      
+      // Tworzenie gospodarstwa w bazie danych
+      herdResult = await herdRepository.create(herdToCreate);
+      console.log('[AUTH_SERVICE] Utworzono gospodarstwo, ID:', herdResult.id);
+    }
+
+    // Jeśli podano ID organizacji, do której należy dodać użytkownika, dodaj go
+    if (addToOrganizationId) {
+      try {
+        console.log(`[AUTH_SERVICE] Dodawanie użytkownika ${newUser.id} do organizacji ${addToOrganizationId} z rolą ${userRole}`);
+        await organizationRepository.addUserToOrganization(addToOrganizationId, newUser.id, userRole);
+        console.log(`[AUTH_SERVICE] Użytkownik dodany do organizacji ${addToOrganizationId}`);
+      } catch (linkError) {
+        console.error('[AUTH_SERVICE] Błąd podczas dodawania użytkownika do organizacji:', linkError);
+        // Nie przerywamy procesu rejestracji, ale logujemy błąd
+      }
+    }
+
+    // Pobierz wszystkie organizacje i role użytkownika (uwzględniając nowo dodane)
+    let userOrganizations = [];
+    if (organizationResult) {
+      userOrganizations.push({ id: organizationResult.id, role: 'owner' });
+    }
+    
+    // Jeśli użytkownik został dodany do organizacji, dodaj również tę informację
+    if (addToOrganizationId) {
+      // Sprawdź, czy ta organizacja już nie została dodana (aby uniknąć duplikatów)
+      const alreadyAdded = userOrganizations.some(org => org.id && org.id.toString() === addToOrganizationId.toString());
+      
+      if (!alreadyAdded) {
+        userOrganizations.push({ id: addToOrganizationId, role: userRole });
+      }
+    }
 
     // Generuj tokeny z uwzględnieniem organizacji i ról
     const { accessToken, refreshToken } = this.generateTokens(newUser.id, userOrganizations);
@@ -41,6 +95,7 @@ class AuthService {
     return {
       user: newUser,
       organization: organizationResult,
+      herd: herdResult,
       accessToken,
       refreshToken
     };
@@ -72,23 +127,21 @@ class AuthService {
       
       console.log('[AUTH] ✅ Hasło zweryfikowane poprawnie');
 
-      // Pobierz organizacje użytkownika
-      console.log('[AUTH] Pobieranie organizacji użytkownika...');
+      // Pobierz organizacje użytkownika wraz z rolami jednym zapytaniem
+      console.log('[AUTH] Pobieranie organizacji użytkownika z rolami...');
       let organizations = [];
       let userOrganizationsWithRoles = [];
       
       try {
-        organizations = await organizationRepository.getUserOrganizations(user.id);
-        console.log('[AUTH] ✅ Pobrano organizacje:', organizations.length);
+        // Używamy nowej metody, która od razu pobiera role
+        organizations = await organizationRepository.getUserOrganizationsWithRoles(user.id);
+        console.log('[AUTH] ✅ Pobrano organizacje z rolami:', organizations.length);
         
-        // Pobierz role użytkownika w każdej organizacji
-        for (const org of organizations) {
-          const role = await organizationRepository.getUserRole(org.id, user.id);
-          userOrganizationsWithRoles.push({
-            id: org.id,
-            role: role
-          });
-        }
+        // Przygotowanie danych o organizacjach z rolami do tokenu
+        userOrganizationsWithRoles = organizations.map(org => ({
+          id: org.id,
+          role: org.role
+        }));
       } catch (orgError) {
         console.log('[AUTH] ⚠️ Błąd podczas pobierania organizacji:', orgError.message);
         // Kontynuuj mimo błędu organizacji
@@ -108,7 +161,7 @@ class AuthService {
       console.log('[AUTH] 🎉 Logowanie zakończone sukcesem');
       return {
         user: userToReturn,
-        organizations,
+        organizations, // Teraz organizacje zawierają również role
         accessToken,
         refreshToken
       };
@@ -179,18 +232,8 @@ class AuthService {
       throw new Error('Użytkownik nie znaleziony');
     }
 
-    // Pobierz organizacje użytkownika
-    const organizations = await organizationRepository.getUserOrganizations(userId);
-    
-    // Pobierz role użytkownika w każdej organizacji
-    const organizationsWithRoles = [];
-    for (const org of organizations) {
-      const role = await organizationRepository.getUserRole(org.id, userId);
-      organizationsWithRoles.push({
-        ...org,
-        role
-      });
-    }
+    // Pobierz organizacje użytkownika wraz z rolami jednym zapytaniem
+    const organizations = await organizationRepository.getUserOrganizationsWithRoles(userId);
 
     // Usuń hasło z obiektu użytkownika
     const userToReturn = { ...user };
@@ -198,7 +241,7 @@ class AuthService {
     
     return {
       user: userToReturn,
-      organizations: organizationsWithRoles
+      organizations // Teraz organizacje zawierają również role
     };
   }
 }

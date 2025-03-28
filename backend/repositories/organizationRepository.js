@@ -35,9 +35,34 @@ class OrganizationRepository {
     return result.rows[0];
   }
 
+  // Nowa metoda do usuwania powiązania użytkownik-organizacja
+  async removeUserFromOrganization(organizationId, userId) {
+    console.log(`[ORG_REPO] Usuwanie powiązania użytkownika ${userId} z organizacją ${organizationId}`);
+    
+    const result = await db.query(
+      `DELETE FROM organization_user 
+       WHERE organization_id = $1 AND user_id = $2 
+       RETURNING *`,
+      [organizationId, userId]
+    );
+    
+    return result.rows[0];
+  }
+
   async getUserOrganizations(userId) {
     const result = await db.query(
       `SELECT o.* FROM organizations o 
+       JOIN organization_user ou ON o.id = ou.organization_id 
+       WHERE ou.user_id = $1`,
+      [userId]
+    );
+    
+    return result.rows;
+  }
+
+  async getUserOrganizationsWithRoles(userId) {
+    const result = await db.query(
+      `SELECT o.*, ou.role FROM organizations o 
        JOIN organization_user ou ON o.id = ou.organization_id 
        WHERE ou.user_id = $1`,
       [userId]

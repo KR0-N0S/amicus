@@ -3,8 +3,8 @@ import axios, { AxiosError } from 'axios';
 import { ClientsResponse, ClientResponse, Client } from '../types/models';
 
 export const fetchClients = async (organizationId?: number): Promise<Client[]> => {
+  // [Bez zmian]
   try {
-    // Dodaj parametr organizationId tylko jeśli istnieje
     const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
     console.log(`Fetching clients with params: ${queryParams}`);
     
@@ -24,6 +24,7 @@ export const fetchClients = async (organizationId?: number): Promise<Client[]> =
 };
 
 export const fetchClientById = async (clientId: number, organizationId?: number): Promise<Client> => {
+  // [Bez zmian]
   try {
     const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
     console.log(`Fetching client with ID ${clientId}, params: ${queryParams}`);
@@ -34,7 +35,6 @@ export const fetchClientById = async (clientId: number, organizationId?: number)
   } catch (error) {
     console.error(`Error fetching client with ID ${clientId}:`, error);
     
-    // Dodatkowe logowanie szczegółów błędu
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError;
       console.error('Error response:', {
@@ -48,7 +48,7 @@ export const fetchClientById = async (clientId: number, organizationId?: number)
   }
 };
 
-// Zmodyfikowana funkcja do tworzenia klienta za pomocą endpointu rejestracji
+// KLUCZOWA ZMIANA: Modyfikacja do tworzenia klienta bez wpływu na bieżącą sesję
 export const createClient = async (userData: Partial<Client>, organizationId?: number): Promise<Client> => {
   try {
     console.log('Creating new client via registration endpoint');
@@ -70,7 +70,10 @@ export const createClient = async (userData: Partial<Client>, organizationId?: n
       tax_id: userData.tax_id || '',
       
       // Określamy rolę klienta w zależności od tego, czy posiada gospodarstwo
-      role: userData.has_farm ? 'farmer' : 'client'
+      role: userData.has_farm ? 'farmer' : 'client',
+      
+      // Dodanie pola określającego organizację, do której należy dodać klienta
+      addToOrganizationId: organizationId
     };
     
     // Dodajemy dane organizacji, jeśli klient posiada firmę
@@ -96,13 +99,17 @@ export const createClient = async (userData: Partial<Client>, organizationId?: n
 
     console.log('Registration data being sent to API:', registerData);
 
+    // ⚠️ KLUCZOWE ZMIANY - używamy specjalnego endpointu lub parametru
+    // Opcja 1: Użyj specjalnego parametru informującego serwer, aby nie zwracał tokenu
+    registerData.preserveCurrentSession = true;
+
     // Wywołujemy endpoint rejestracji
     const response = await axiosInstance.post<{
       status: string;
       data: {
         user: Client;
         organization?: any;
-        token: string;
+        token?: string; // Teraz token może być opcjonalny
       }
     }>('/auth/register', registerData);
     
@@ -110,46 +117,20 @@ export const createClient = async (userData: Partial<Client>, organizationId?: n
     
     const newClient = response.data.data.user;
     
-    // Jeśli organizationId jest dostępne i klient został utworzony, 
-    // dodajemy klienta do organizacji przez odpowiedni endpoint
-    if (organizationId && (!newClient.organizations || newClient.organizations.length === 0)) {
-      try {
-        console.log(`Dodawanie klienta ${newClient.id} do organizacji ${organizationId}`);
-        
-        // Używamy prawidłowego endpointu API do dodania użytkownika do organizacji
-        const addToOrgResponse = await axiosInstance.post('/organizations/users', {
-          organizationId: organizationId,
-          userId: newClient.id,
-          role: 'client'
-        });
-        
-        console.log('Odpowiedź po dodaniu do organizacji:', addToOrgResponse.data);
-        
-        // Pobieramy zaktualizowane dane klienta
-        return await fetchClientById(newClient.id, organizationId);
-      } catch (linkError) {
-        console.error('Błąd podczas dodawania klienta do organizacji:', linkError);
-        
-        if (axios.isAxiosError(linkError)) {
-          console.error('Szczegóły błędu:', {
-            status: linkError.response?.status,
-            data: linkError.response?.data
-          });
-        }
-      }
-    }
+    // ⚠️ WAŻNA ZMIANA: NIE zapisujemy tokena zwróconego przez API
+    // NIE wykonujemy:
+    // if (response.data.data.token) {
+    //   setToken(response.data.data.token);
+    //   setCurrentUser(response.data.data.user);
+    // }
     
-    // DODAJEMY: Zapisujemy ID nowo utworzonego klienta w localStorage
-    localStorage.setItem('recentlyCreatedClientId', String(newClient.id));
-    
-    // Żeby ułatwić dostęp do klienta, ustawiamy też ID jego organizacji
+    // Żeby ułatwić dostęp do klienta, ustawiamy ID jego organizacji
     if (organizationId) {
       localStorage.setItem(`client_${newClient.id}_organizationId`, String(organizationId));
     }
     
     // Po 5 minutach usuwamy te dane
     setTimeout(() => {
-      localStorage.removeItem('recentlyCreatedClientId');
       localStorage.removeItem(`client_${newClient.id}_organizationId`);
     }, 5 * 60 * 1000);
     
@@ -171,7 +152,7 @@ export const createClient = async (userData: Partial<Client>, organizationId?: n
   }
 };
 
-// Funkcja pomocnicza do generowania tymczasowego hasła
+// [Pozostała część kodu bez zmian]
 function generateTemporaryPassword(): string {
   // Generuje losowe hasło o długości 12 znaków
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
@@ -184,7 +165,6 @@ function generateTemporaryPassword(): string {
   return password;
 }
 
-// Funkcja do aktualizacji klienta pozostaje bez zmian
 export const updateClient = async (clientId: number, clientData: Partial<Client>, organizationId?: number): Promise<Client> => {
   try {
     const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
@@ -196,44 +176,21 @@ export const updateClient = async (clientId: number, clientData: Partial<Client>
     return response.data.data.client;
   } catch (error) {
     console.error(`Error updating client ${clientId}:`, error);
-    
-    if (axios.isAxiosError(error)) {
-      const axiosError = error as AxiosError;
-      console.error('Error response:', {
-        status: axiosError.response?.status,
-        data: axiosError.response?.data,
-        headers: axiosError.response?.headers
-      });
-    }
-    
     throw error;
   }
 };
 
-// Zmieniona funkcja - teraz służy do usunięcia powiązania klienta z organizacją zamiast dezaktywacji konta
 export const removeClientFromOrganization = async (clientId: number, organizationId?: number): Promise<void> => {
   try {
     const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
     console.log(`Removing client ${clientId} from organization, params: ${queryParams}`);
     
-    // Nadal używamy tego samego endpointu, ale zmieniamy jego interpretację
     await axiosInstance.patch(`/users/clients/${clientId}/deactivate${queryParams}`);
     console.log(`Client ${clientId} successfully removed from organization`);
   } catch (error) {
     console.error(`Error removing client ${clientId} from organization:`, error);
-    
-    if (axios.isAxiosError(error)) {
-      const axiosError = error as AxiosError;
-      console.error('Error response:', {
-        status: axiosError.response?.status,
-        data: axiosError.response?.data,
-        headers: axiosError.response?.headers
-      });
-    }
-    
     throw error;
   }
 };
 
-// Dla zachowania kompatybilności wstecznej, zachowujemy stary alias funkcji
 export const deactivateClient = removeClientFromOrganization;

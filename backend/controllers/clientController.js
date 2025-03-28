@@ -195,16 +195,16 @@ exports.getClientById = async (req, res, next) => {
   }
 };
 
-// Deaktywacja klienta
-exports.deactivateClient = async (req, res, next) => {
+// Aktualizacja danych klienta
+exports.updateClient = async (req, res, next) => {
   try {
     const { userId, user } = req;
     const { clientId } = req.params;
     const organizationId = req.query.organizationId || 
-                          req.params.organizationId || 
-                          (user.organizations && user.organizations.length > 0 ? user.organizations[0].id : null);
+                           req.params.organizationId || 
+                           (user.organizations && user.organizations.length > 0 ? user.organizations[0].id : null);
     
-    console.log(`[CLIENT_CONTROLLER] Próba deaktywacji klienta ID ${clientId} przez użytkownika ${userId}, organizacja: ${organizationId}`);
+    console.log(`[CLIENT_CONTROLLER] Aktualizacja klienta ID ${clientId} dla użytkownika ${userId}, organizacja: ${organizationId}`);
     
     if (!organizationId) {
       return res.status(400).json({
@@ -223,12 +223,123 @@ exports.deactivateClient = async (req, res, next) => {
       }
     }
     
-    // Tylko owner i officestaff mogą deaktywować klientów
-    if (!['owner', 'officestaff'].includes(userRoleInOrg)) {
-      console.log(`[CLIENT_CONTROLLER] Odmowa dostępu: użytkownik ${userId} (rola: ${userRoleInOrg}) próbował dezaktywować klienta ${clientId}`);
+    // Jeśli nie udało się określić roli, zwróć błąd
+    if (!userRoleInOrg) {
+      console.log(`[CLIENT_CONTROLLER] Nie znaleziono roli użytkownika ${userId} w organizacji ${organizationId}`);
       return res.status(403).json({
         status: 'error',
-        message: 'Brak uprawnień do dezaktywacji tego klienta'
+        message: 'Brak uprawnień - nie znaleziono roli w organizacji'
+      });
+    }
+    
+    // Sprawdzenie czy użytkownik ma uprawnienia do aktualizacji tego klienta
+    let canEditClient = false;
+    
+    // SuperAdmin, Owner i OfficeStaff mogą aktualizować dane klientów
+    if (['superadmin', 'owner', 'officestaff'].includes(userRoleInOrg)) {
+      canEditClient = true;
+      console.log(`[CLIENT_CONTROLLER] Użytkownik ${userId} ma rolę ${userRoleInOrg} - może aktualizować dane klientów`);
+    } 
+    // Użytkownik może aktualizować swoje własne dane
+    else if (userId.toString() === clientId.toString()) {
+      canEditClient = true;
+      console.log(`[CLIENT_CONTROLLER] Użytkownik aktualizuje swoje własne dane`);
+    }
+    
+    if (!canEditClient) {
+      console.log(`[CLIENT_CONTROLLER] Odmowa dostępu: użytkownik ${userId} (rola: ${userRoleInOrg}) próbował zaktualizować klienta ${clientId}`);
+      return res.status(403).json({
+        status: 'error',
+        message: 'Brak uprawnień do aktualizacji danych tego klienta'
+      });
+    }
+    
+    // Pobierz dane klienta aby sprawdzić czy istnieje
+    const existingClient = await userRepository.getSingleUser(clientId);
+    
+    if (!existingClient) {
+      console.log(`[CLIENT_CONTROLLER] Nie znaleziono klienta o ID ${clientId}`);
+      return res.status(404).json({
+        status: 'error',
+        message: 'Klient nie został znaleziony'
+      });
+    }
+    
+    // Walidacja danych wejściowych
+    const updateData = {
+      email: req.body.email || existingClient.email,
+      first_name: req.body.first_name || existingClient.first_name,
+      last_name: req.body.last_name || existingClient.last_name,
+      phone: req.body.phone || existingClient.phone,
+      street: req.body.street || existingClient.street,
+      house_number: req.body.house_number || existingClient.house_number,
+      city: req.body.city || existingClient.city,
+      postal_code: req.body.postal_code || existingClient.postal_code,
+      tax_id: req.body.tax_id || existingClient.tax_id
+    };
+    
+    // Sprawdź, czy email już istnieje (jeśli został zmieniony)
+    if (updateData.email !== existingClient.email) {
+      const emailExists = await userRepository.findByEmail(updateData.email);
+      if (emailExists) {
+        console.log(`[CLIENT_CONTROLLER] Email ${updateData.email} jest już używany przez innego użytkownika`);
+        return res.status(409).json({
+          status: 'error',
+          message: 'Adres email jest już używany przez innego użytkownika'
+        });
+      }
+    }
+    
+    console.log(`[CLIENT_CONTROLLER] Aktualizacja danych klienta ${clientId}`);
+    const updatedClient = await userRepository.updateUser(clientId, updateData);
+    
+    console.log(`[CLIENT_CONTROLLER] Sukces: Zaktualizowano dane klienta ${clientId}`);
+    res.status(200).json({
+      status: 'success',
+      data: {
+        client: excludePassword(updatedClient)
+      }
+    });
+  } catch (error) {
+    console.error('[CLIENT_CONTROLLER] Error:', error);
+    next(new AppError('Wystąpił błąd podczas aktualizacji danych klienta', 500));
+  }
+};
+
+// Zmieniona funkcja deactivateClient - teraz usuwa powiązanie zamiast dezaktywacji konta
+exports.deactivateClient = async (req, res, next) => {
+  try {
+    const { userId, user } = req;
+    const { clientId } = req.params;
+    const organizationId = req.query.organizationId || 
+                          req.params.organizationId || 
+                          (user.organizations && user.organizations.length > 0 ? user.organizations[0].id : null);
+    
+    console.log(`[CLIENT_CONTROLLER] Próba usunięcia powiązania klienta ID ${clientId} z organizacją ${organizationId} przez użytkownika ${userId}`);
+    
+    if (!organizationId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Nie podano identyfikatora organizacji'
+      });
+    }
+    
+    // Sprawdź rolę użytkownika w organizacji
+    let userRoleInOrg = null;
+    if (user.organizations) {
+      const userOrg = user.organizations.find(org => org.id && org.id.toString() === organizationId.toString());
+      if (userOrg) {
+        userRoleInOrg = userOrg.role ? userOrg.role.toLowerCase() : null;
+        console.log(`[CLIENT_CONTROLLER] Rola użytkownika ${userId} w organizacji ${organizationId}: ${userRoleInOrg}`);
+      }
+    }
+    
+    // Tylko owner i officestaff mogą usuwać powiązania klientów
+    if (!['owner', 'officestaff'].includes(userRoleInOrg)) {
+      console.log(`[CLIENT_CONTROLLER] Odmowa dostępu: użytkownik ${userId} (rola: ${userRoleInOrg}) próbował usunąć powiązanie klienta ${clientId}`);
+      return res.status(403).json({
+        status: 'error',
+        message: 'Brak uprawnień do usunięcia powiązania klienta z organizacją'
       });
     }
     
@@ -256,31 +367,40 @@ exports.deactivateClient = async (req, res, next) => {
       });
     }
     
-    // Sprawdź czy klient nie jest właścicielem lub pracownikiem (tych nie można dezaktywować)
+    // Sprawdź czy klient nie jest właścicielem organizacji (nie można usunąć ownera)
     const clientRoleInOrg = client.organizations.find(org => 
       org.id && org.id.toString() === organizationId.toString()
     )?.role?.toLowerCase();
     
-    if (['owner', 'employee', 'superadmin', 'officestaff', 'inseminator', 'vettech', 'vet'].includes(clientRoleInOrg)) {
-      console.log(`[CLIENT_CONTROLLER] Nie można deaktywować użytkownika o roli ${clientRoleInOrg}`);
+    if (clientRoleInOrg === 'owner' && userRoleInOrg !== 'superadmin') {
+      console.log(`[CLIENT_CONTROLLER] Nie można usunąć powiązania właściciela organizacji`);
       return res.status(403).json({
         status: 'error',
-        message: `Nie można dezaktywować użytkownika o roli ${clientRoleInOrg}`
+        message: 'Nie można usunąć powiązania właściciela organizacji'
       });
     }
     
-    // Deaktywuj klienta
-    await userRepository.deactivateUser(clientId);
+    // Właściciel nie może usunąć sam siebie
+    if (userId.toString() === clientId.toString() && clientRoleInOrg === 'owner') {
+      console.log(`[CLIENT_CONTROLLER] Właściciel nie może usunąć sam siebie z organizacji`);
+      return res.status(403).json({
+        status: 'error',
+        message: 'Właściciel nie może usunąć sam siebie z organizacji'
+      });
+    }
     
-    console.log(`[CLIENT_CONTROLLER] Klient ${clientId} został pomyślnie dezaktywowany`);
+    // Usuwamy powiązanie zamiast dezaktywacji konta
+    await organizationRepository.removeUserFromOrganization(organizationId, clientId);
+    
+    console.log(`[CLIENT_CONTROLLER] Powiązanie klienta ${clientId} z organizacją ${organizationId} zostało pomyślnie usunięte`);
     
     res.status(200).json({
       status: 'success',
-      message: 'Klient został pomyślnie dezaktywowany'
+      message: 'Powiązanie klienta z organizacją zostało pomyślnie usunięte'
     });
     
   } catch (error) {
     console.error('[CLIENT_CONTROLLER] Error:', error);
-    next(new AppError('Wystąpił błąd podczas dezaktywacji klienta', 500));
+    next(new AppError('Wystąpił błąd podczas usuwania powiązania klienta z organizacją', 500));
   }
 };

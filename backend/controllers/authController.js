@@ -25,18 +25,37 @@ exports.register = async (req, res, next) => {
     };
 
     const organizationData = req.body.organization || null;
+    const herdData = req.body.herd || null;
+    
+    // Dodajemy obsługę przypisania do organizacji
+    const addToOrganizationId = req.body.addToOrganizationId || null;
+    const userRole = req.body.role || 'client'; // Domyślnie 'client', ale możemy przyjąć z req.body
 
-    const result = await authService.register(userData, organizationData);
+    // KLUCZOWA ZMIANA: Dodanie obsługi flagi zachowania bieżącej sesji
+    const preserveCurrentSession = req.body.preserveCurrentSession === true;
 
-    // Dodajemy refresh token do httpOnly cookie
-    res.cookie('refreshToken', result.refreshToken, cookieOptions);
+    // Przekazujemy dodatkowe parametry do serwisu
+    const result = await authService.register(
+      userData, 
+      organizationData, 
+      herdData, 
+      addToOrganizationId, 
+      userRole
+    );
+
+    // Dodajemy refresh token do httpOnly cookie tylko jeśli nie zachowujemy bieżącej sesji
+    if (!preserveCurrentSession) {
+      res.cookie('refreshToken', result.refreshToken, cookieOptions);
+    }
 
     res.status(201).json({
       status: 'success',
       data: {
         user: result.user,
         organization: result.organization,
-        token: result.accessToken // zwracamy tylko access token w odpowiedzi
+        herd: result.herd,
+        // KLUCZOWA ZMIANA: Zwracamy token tylko jeśli nie zachowujemy bieżącej sesji
+        ...(preserveCurrentSession ? {} : { token: result.accessToken })
       }
     });
   } catch (error) {

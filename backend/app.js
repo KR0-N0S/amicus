@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const dotenv = require('dotenv');
-const cookieParser = require('cookie-parser'); // Dodane
+const cookieParser = require('cookie-parser');
 const swaggerJsDoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 
@@ -12,9 +12,10 @@ dotenv.config();
 // Import tras
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
-// Pozostałe trasy można dodać później
+const moduleRoutes = require('./routes/moduleRoutes'); // Dodane - import tras dla modułów
 
 // Import middleware
+const { verifyResourceAccess } = require('./middleware/resourceAccessMiddleware');
 const { defaultLimiter } = require('./middleware/rateLimiter');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
@@ -56,13 +57,50 @@ const swaggerDocs = swaggerJsDoc(swaggerOptions);
 const corsOptions = {
   origin: 'http://83.150.236.135:3000',  // dokładny adres frontendu
   credentials: true,  // kluczowe dla obsługi cookies
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // Dodano PATCH
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-HTTP-Method-Override'] // Dodano X-HTTP-Method-Override
 };
 
 // Middleware
+
+// Rozszerzona konfiguracja Helmet - zwiększone bezpieczeństwo dla aplikacji medycznej
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"], // Restricting inline scripts when possible
+      styleSrc: ["'self'", "'unsafe-inline'"], // Needed for most CSS frameworks
+      imgSrc: ["'self'", "data:", "blob:"], // Allow data URIs for images
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"]
+    }
+  },
+  crossOriginEmbedderPolicy: true,
+  crossOriginOpenerPolicy: true,
+  crossOriginResourcePolicy: { policy: "same-site" },
+  dnsPrefetchControl: true, // Kontroluje DNS prefetching
+  expectCt: {
+    enforce: true,
+    maxAge: 30 * 24 * 60 * 60 // 30 dni w sekundach
+  },
+  frameguard: { action: "deny" }, // Zapobieganie clickjacking
+  hidePoweredBy: true,
+  hsts: {
+    maxAge: 180 * 24 * 60 * 60, // 180 dni w sekundach
+    includeSubDomains: true,
+    preload: true
+  },
+  ieNoOpen: true,
+  noSniff: true, // Zapobieganie MIME sniffing
+  permittedCrossDomainPolicies: { permittedPolicies: "none" },
+  referrerPolicy: { policy: "same-origin" },
+  xssFilter: true
+}));
+
 app.use(cors(corsOptions)); // Zaktualizowana konfiguracja CORS
-app.use(helmet()); // Zabezpieczenia nagłówków HTTP
 app.use(cookieParser()); // Dodane - parsowanie cookies
 app.use(express.json()); // Parsowanie JSON w ciele żądania
 app.use(express.urlencoded({ extended: true })); // Parsowanie danych formularzy
@@ -73,6 +111,7 @@ app.use(defaultLimiter);
 // Trasy API
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api', moduleRoutes); // Dodane - trasy dla modułów (wszystkie zaczynają się od /api)
 // Pozostałe trasy można dodać później
 
 // Dokumentacja Swagger

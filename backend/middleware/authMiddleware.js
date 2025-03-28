@@ -63,9 +63,70 @@ exports.verifyToken = async (req, res, next) => {
 
 exports.checkOrganizationAccess = async (req, res, next) => {
   try {
-    // Przygotowanie dla przyszłych rozszerzeń - sprawdzanie uprawnień organizacji
+    // Pobierz identyfikator organizacji z parametrów, zapytania lub ciała żądania
+    const organizationId = req.params.organizationId || req.query.organizationId || req.body.organizationId;
+    
+    // Jeśli nie podano identyfikatora organizacji, przepuść dalej
+    // (może być potrzebne dla endpointów niespecyficznych dla organizacji)
+    if (!organizationId) {
+      return next();
+    }
+    
+    // Sprawdź, czy użytkownik ma organizacje
+    if (!req.userOrganizations || req.userOrganizations.length === 0) {
+      return res.status(403).json({ 
+        message: 'Brak dostępu do tej organizacji', 
+        code: 'NO_ORGANIZATIONS'
+      });
+    }
+    
+    // Sprawdź, czy użytkownik należy do tej organizacji (konwertujemy string na number jeśli potrzeba)
+    const userBelongsToOrg = req.userOrganizations.some(
+      org => org.id === parseInt(organizationId, 10) || org.id === organizationId
+    );
+    
+    if (!userBelongsToOrg) {
+      return res.status(403).json({ 
+        message: 'Brak dostępu do tej organizacji', 
+        code: 'ORGANIZATION_ACCESS_DENIED'
+      });
+    }
+    
+    // Opcjonalnie: sprawdź konkretne uprawnienia dla danej organizacji na podstawie ścieżki
+    const adminPaths = ['/admin', '/settings', '/users/manage'];
+    const medicalPaths = ['/medical', '/insemination', '/visit', '/animals'];
+    
+    let requiredRoles = [];
+    
+    // Sprawdź, czy ścieżka wymaga specjalnych uprawnień
+    if (adminPaths.some(path => req.path.includes(path))) {
+      requiredRoles = ['owner', 'superadmin', 'admin', 'officestaff'];
+    } else if (medicalPaths.some(path => req.path.includes(path))) {
+      requiredRoles = ['owner', 'superadmin', 'admin', 'vet', 'vettech', 'inseminator'];
+    }
+    
+    // Jeśli zdefiniowano wymagane role, sprawdź uprawnienia
+    if (requiredRoles.length > 0) {
+      const hasRequiredRole = req.userOrganizations.some(org => {
+        return (org.id === parseInt(organizationId, 10) || org.id === organizationId) && 
+               org.role && 
+               requiredRoles.includes(org.role.toLowerCase());
+      });
+      
+      if (!hasRequiredRole) {
+        return res.status(403).json({ 
+          message: 'Brak wymaganych uprawnień w tej organizacji', 
+          code: 'INSUFFICIENT_PERMISSIONS'
+        });
+      }
+    }
+    
+    // Zapisz identyfikator organizacji w obiekcie żądania do dalszego użytku
+    req.organizationId = organizationId;
+    
     next();
   } catch (error) {
+    console.error('Error in checkOrganizationAccess middleware:', error);
     return res.status(500).json({ message: 'Błąd serwera' });
   }
 };

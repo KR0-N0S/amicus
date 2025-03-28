@@ -2,7 +2,7 @@ const rateLimit = require('express-rate-limit');
 
 // Domyślny limiter dla wszystkich tras
 const defaultLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minut
+  windowMs: 2 * 60 * 1000, // 15 minut
   max: 100, // limit każdego IP do 100 zapytań na 'window'
   standardHeaders: true, // Zwraca info o limicie w nagłówkach `RateLimit-*`
   legacyHeaders: false, // Dezaktywuje nagłówki `X-RateLimit-*`
@@ -13,10 +13,10 @@ const defaultLimiter = rateLimit({
   }
 });
 
-// Bardziej restrykcyjny limiter dla tras autoryzacji
+// Bardziej restrykcyjny limiter dla tras autoryzacji - zwiększamy limit
 const authLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 godzina
-  max: 10, // limit każdego IP do 10 zapytań na 'window'
+  windowMs: 15 * 60 * 1000, // Zmienione z 1 godziny na 15 minut
+  max: 30, // Zwiększone z 10 do 30 zapytań
   standardHeaders: true,
   legacyHeaders: false,
   trustProxy: true, // Zaufaj nagłówkom przekazywanym przez proxy

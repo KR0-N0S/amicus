@@ -1,6 +1,6 @@
 import axiosInstance from './axios';
 import { AuthResponse } from '../types/models';
-import { setToken, setCurrentUser } from '../utils/auth';
+import { setToken, setCurrentUser, getDecodedToken } from '../utils/auth';
 
 interface RegisterData {
   email: string;
@@ -80,6 +80,13 @@ export const getCurrentUserProfile = async (): Promise<AuthResponse> => {
   console.log("Organizacje użytkownika z API:", response.data.data?.organizations);
   
   if (response.data.status === 'success') {
+    // KLUCZOWA ZMIANA: Weryfikacja ID użytkownika z tokenem JWT
+    const decodedToken = getDecodedToken();
+    if (decodedToken && decodedToken.id.toString() !== response.data.data.user.id.toString()) {
+      console.error('ID użytkownika z API nie zgadza się z tokenem JWT - nie aktualizuję danych!');
+      throw new Error('Wykryto niespójność danych użytkownika z tokenem');
+    }
+    
     // Dodaj organizacje do obiektu użytkownika przed zapisaniem
     const userWithOrganizations = {
       ...response.data.data.user,

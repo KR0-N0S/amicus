@@ -1,29 +1,40 @@
-import axiosInstance from './axios';
-import { Animal, ApiResponse } from '../types/models';
+import axios from './axios';
+// Usunięto nieużywany import ApiResponse
+import { Animal } from '../types/models';
 
-export const getAnimals = async (page = 1, limit = 10): Promise<ApiResponse<Animal[]>> => {
-  const response = await axiosInstance.get<ApiResponse<Animal[]>>('/animals', {
-    params: { page, limit }
+// Funkcja do pobierania listy zwierząt
+export const getAnimals = async (page = 1, limit = 10, animalType?: string) => {
+  const response = await axios.get('/api/animals', {
+    params: {
+      page,
+      limit,
+      animal_type: animalType // Opcjonalny parametr typu zwierzęcia
+    }
   });
   return response.data;
 };
 
-export const getAnimal = async (id: number): Promise<ApiResponse<Animal>> => {
-  const response = await axiosInstance.get<ApiResponse<Animal>>(`/animals/${id}`);
-  return response.data;
+// Usunięto nieużywaną definicję interfejsu AnimalResponse
+
+// Funkcja do pobierania pojedynczego zwierzęcia
+export const getAnimal = async (id: number): Promise<Animal> => {
+  const response = await axios.get(`/api/animals/${id}`);
+  return response.data.data;
 };
 
-export const createAnimal = async (animalData: Omit<Animal, 'id' | 'owner_id' | 'created_at'>): Promise<ApiResponse<Animal>> => {
-  const response = await axiosInstance.post<ApiResponse<Animal>>('/animals', animalData);
-  return response.data;
+// Funkcja do tworzenia nowego zwierzęcia
+export const createAnimal = async (animalData: Partial<Animal>): Promise<Animal> => {
+  const response = await axios.post('/api/animals', animalData);
+  return response.data.data;
 };
 
-export const updateAnimal = async (id: number, animalData: Partial<Animal>): Promise<ApiResponse<Animal>> => {
-  const response = await axiosInstance.put<ApiResponse<Animal>>(`/animals/${id}`, animalData);
-  return response.data;
+// Funkcja do aktualizacji zwierzęcia
+export const updateAnimal = async (id: number, animalData: Partial<Animal>): Promise<Animal> => {
+  const response = await axios.put(`/api/animals/${id}`, animalData);
+  return response.data.data;
 };
 
-export const deleteAnimal = async (id: number): Promise<ApiResponse<null>> => {
-  const response = await axiosInstance.delete<ApiResponse<null>>(`/animals/${id}`);
-  return response.data;
+// Funkcja do usuwania zwierzęcia
+export const deleteAnimal = async (id: number): Promise<void> => {
+  await axios.delete(`/api/animals/${id}`);
 };

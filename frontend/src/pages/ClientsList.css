@@ -102,3 +102,18 @@
 .table-container {
   margin-bottom: 0;
 }
+
+@media (max-width: 768px) {
+  .clients-list {
+    padding: 0px;
+  }
+  .page-title {
+    display: none;
+  }
+  .card-header {
+    align-items: center;
+  }
+  .data-table th, .data-table td {
+    padding-left: 1rem; /* zamiast padding: 1rem */
+  }
+}

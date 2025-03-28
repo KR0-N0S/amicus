@@ -30,30 +30,51 @@ const useClient = (
     try {
       setIsLoading(true);
       setError(null);
+      
       // Pobierz organizationId z pierwszej organizacji użytkownika (jeśli istnieje)
       const organizationId = user?.organizations && user.organizations.length > 0
         ? user.organizations[0].id
         : undefined;
       
-      const data = await fetchClientById(Number(id), organizationId);
-      // Jeżeli dostęp nie jest przyznany – natychmiast przekierowujemy
-      const hasAccess = checkAccessToClient(data, user);
-      if (!hasAccess) {
-        console.log('Access denied to client data');
+      // Najpierw sprawdź, czy użytkownik ma właściwe uprawnienia w swojej organizacji
+      if (!user || !user.organizations || user.organizations.length === 0) {
+        console.log('User has no organizations, redirecting');
         navigate('/clients');
         return;
       }
+      
+      console.log(`Fetching client ID: ${id} for user: ${user.id} with organization: ${organizationId}`);
+      
+      const data = await fetchClientById(Number(id), organizationId);
+      
+      // Dodatkowa weryfikacja po stronie frontendu - dodatkowa warstwa bezpieczeństwa
+      const hasAccess = checkAccessToClient(data, user);
+      if (!hasAccess) {
+        console.log('Frontend access verification failed for client data');
+        navigate('/clients');
+        return;
+      }
+      
       setClient(data);
       console.log("Client loaded:", data);
     } catch (err: any) {
       console.error('Error fetching client details:', err);
+      
+      // Lepsze zarządzanie błędami HTTP
       if (err.response) {
+        // Obsługa błędów HTTP
         if (err.response.status === 403) {
+          console.log('Access denied (403) - redirecting to clients list');
           navigate('/clients');
-          return;
+          return; // Natychmiast zakończ, aby nie ustawiać stanu po przekierowaniu
         } else if (err.response.status === 404) {
+          console.log('Client not found (404) - redirecting to clients list');
           navigate('/clients');
-          return;
+          return; // Natychmiast zakończ, aby nie ustawiać stanu po przekierowaniu
+        } else if (err.response.status === 401) {
+          console.log('Unauthorized (401) - redirecting to login');
+          navigate('/login');
+          return; // Natychmiast zakończ, aby nie ustawiać stanu po przekierowaniu
         } else if (err.response.status === 500) {
           setError('Wystąpił błąd serwera. Spróbuj odświeżyć stronę lub skontaktuj się z administratorem.');
         } else {
