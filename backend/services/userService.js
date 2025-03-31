@@ -54,6 +54,14 @@ class UserService {
 
     return { success: true, message: 'Hasło zostało zmienione' };
   }
+  
+  async searchUsers(searchQuery, roles, organizationId) {
+    if (!organizationId) {
+      throw new Error('ID organizacji jest wymagane');
+    }
+    
+    return await userRepository.searchUsers(searchQuery, roles, organizationId);
+  }
 }
 
 module.exports = new UserService();

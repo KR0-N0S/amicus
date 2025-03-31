@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchClientById } from '../api/clientApi';
+import { fetchClientById } from '../api/userApi';
 import { Client } from '../types/models';
 
 interface UseClientResult {

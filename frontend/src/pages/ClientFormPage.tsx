@@ -4,7 +4,7 @@ import { FaArrowLeft } from 'react-icons/fa';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import ClientForm from '../components/forms/ClientForm';
-import { fetchClientById, createClient, updateClient } from '../api/clientApi';
+import { fetchClientById, createClient, updateClient } from '../api/userApi';
 import { useAuth } from '../context/AuthContext';
 import { Client } from '../types/models';
 import { AuthContextType } from '../context/auth-types';

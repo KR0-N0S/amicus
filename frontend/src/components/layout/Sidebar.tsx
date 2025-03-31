@@ -93,6 +93,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onLinkClick }) => {
       items: [
         { title: 'Zwierzęta gospodarskie', path: '/animals/farm', addNew: '/animals/farm/new' },
         { title: 'Zwierzęta domowe', path: '/animals/pets', addNew: '/animals/pets/new' },
+        { title: 'Ustawienia', path: '/animals/settings' },
       ],
     },
     {

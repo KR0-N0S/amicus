@@ -2,8 +2,9 @@ import axiosInstance from './axios';
 import axios, { AxiosError } from 'axios';
 import { ClientsResponse, ClientResponse, Client } from '../types/models';
 
+// ============= KLIENCI / ROLNICY =============
+
 export const fetchClients = async (organizationId?: number): Promise<Client[]> => {
-  // [Bez zmian]
   try {
     const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
     console.log(`Fetching clients with params: ${queryParams}`);
@@ -24,7 +25,6 @@ export const fetchClients = async (organizationId?: number): Promise<Client[]> =
 };
 
 export const fetchClientById = async (clientId: number, organizationId?: number): Promise<Client> => {
-  // [Bez zmian]
   try {
     const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
     console.log(`Fetching client with ID ${clientId}, params: ${queryParams}`);
@@ -48,7 +48,6 @@ export const fetchClientById = async (clientId: number, organizationId?: number)
   }
 };
 
-// KLUCZOWA ZMIANA: Modyfikacja do tworzenia klienta bez wpływu na bieżącą sesję
 export const createClient = async (userData: Partial<Client>, organizationId?: number): Promise<Client> => {
   try {
     console.log('Creating new client via registration endpoint');
@@ -99,8 +98,7 @@ export const createClient = async (userData: Partial<Client>, organizationId?: n
 
     console.log('Registration data being sent to API:', registerData);
 
-    // ⚠️ KLUCZOWE ZMIANY - używamy specjalnego endpointu lub parametru
-    // Opcja 1: Użyj specjalnego parametru informującego serwer, aby nie zwracał tokenu
+    // Używamy specjalnego parametru informującego serwer, aby nie zwracał tokenu
     registerData.preserveCurrentSession = true;
 
     // Wywołujemy endpoint rejestracji
@@ -116,13 +114,6 @@ export const createClient = async (userData: Partial<Client>, organizationId?: n
     console.log('Client registration API response:', response.data);
     
     const newClient = response.data.data.user;
-    
-    // ⚠️ WAŻNA ZMIANA: NIE zapisujemy tokena zwróconego przez API
-    // NIE wykonujemy:
-    // if (response.data.data.token) {
-    //   setToken(response.data.data.token);
-    //   setCurrentUser(response.data.data.user);
-    // }
     
     // Żeby ułatwić dostęp do klienta, ustawiamy ID jego organizacji
     if (organizationId) {
@@ -151,19 +142,6 @@ export const createClient = async (userData: Partial<Client>, organizationId?: n
     throw error;
   }
 };
-
-// [Pozostała część kodu bez zmian]
-function generateTemporaryPassword(): string {
-  // Generuje losowe hasło o długości 12 znaków
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-  let password = '';
-  
-  for (let i = 0; i < 12; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  
-  return password;
-}
 
 export const updateClient = async (clientId: number, clientData: Partial<Client>, organizationId?: number): Promise<Client> => {
   try {
@@ -194,3 +172,173 @@ export const removeClientFromOrganization = async (clientId: number, organizatio
 };
 
 export const deactivateClient = removeClientFromOrganization;
+
+// ============= PRACOWNICY =============
+
+// Funkcja do pobierania pracowników
+export const fetchEmployees = async (organizationId?: number) => {
+  try {
+    const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
+    console.log(`Fetching employees with params: ${queryParams}`);
+    
+    const response = await axiosInstance.get(`/users/employees${queryParams}`);
+    console.log('Employees API response:', response);
+    
+    if (!response.data || !response.data.data || !response.data.data.employees) {
+      console.error('Nieprawidłowa struktura odpowiedzi API:', response.data);
+      return [];
+    }
+    
+    return response.data.data.employees;
+  } catch (error) {
+    console.error('Error fetching employees:', error);
+    throw error;
+  }
+};
+
+// Funkcja do pobierania pracownika po ID
+export const fetchEmployeeById = async (employeeId: number, organizationId?: number) => {
+  try {
+    const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
+    console.log(`Fetching employee with ID ${employeeId}, params: ${queryParams}`);
+    
+    const response = await axiosInstance.get(`/users/employees/${employeeId}${queryParams}`);
+    console.log('Employee API response:', response.data);
+    
+    return response.data.data.employee;
+  } catch (error) {
+    console.error(`Error fetching employee with ID ${employeeId}:`, error);
+    
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError;
+      console.error('Error response:', {
+        status: axiosError.response?.status,
+        data: axiosError.response?.data,
+        headers: axiosError.response?.headers
+      });
+    }
+    
+    throw error;
+  }
+};
+
+// Funkcja do tworzenia nowego pracownika
+export const createEmployee = async (employeeData: any, organizationId?: number) => {
+  try {
+    console.log('Creating new employee');
+    console.log('Employee data:', employeeData);
+    console.log('Organization ID:', organizationId);
+    
+    // Przygotowanie danych do rejestracji pracownika
+    const registerData = {
+      ...employeeData,
+      role: 'employee',
+      password: generateTemporaryPassword(),
+      preserveCurrentSession: true,
+      addToOrganizationId: organizationId
+    };
+
+    const response = await axiosInstance.post('/auth/register', registerData);
+    console.log('Employee creation API response:', response.data);
+    
+    return response.data.data.user;
+  } catch (error) {
+    console.error('Error creating employee:', error);
+    
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError;
+      console.error('Error response:', {
+        status: axiosError.response?.status,
+        data: axiosError.response?.data,
+        headers: axiosError.response?.headers
+      });
+    }
+    
+    throw error;
+  }
+};
+
+// Funkcja do aktualizacji danych pracownika
+export const updateEmployee = async (employeeId: number, employeeData: any, organizationId?: number) => {
+  try {
+    const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
+    console.log(`Updating employee ${employeeId}, params: ${queryParams}`, employeeData);
+    
+    const response = await axiosInstance.put(`/users/employees/${employeeId}${queryParams}`, employeeData);
+    console.log('Update employee API response:', response.data);
+    
+    return response.data.data.employee;
+  } catch (error) {
+    console.error(`Error updating employee ${employeeId}:`, error);
+    throw error;
+  }
+};
+
+// ============= WSPÓLNE FUNKCJE =============
+
+// Funkcja do generowania tymczasowego hasła
+function generateTemporaryPassword(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+  let password = '';
+  
+  for (let i = 0; i < 12; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  
+  return password;
+}
+
+// Uniwersalna funkcja do wyszukiwania użytkowników z różnymi rolami
+export const searchUsers = async (searchTerm: string, roles: string[] = ['farmer', 'client'], organizationId?: number) => {
+  try {
+    if (searchTerm.length < 3) {
+      return { data: [] };
+    }
+
+    const queryParams = new URLSearchParams({
+      query: searchTerm,
+      roles: roles.join(',') // Możliwość filtrowania po dowolnych rolach
+    });
+    
+    if (organizationId) {
+      queryParams.append('organizationId', organizationId.toString());
+    }
+    
+    console.log(`Searching users with query: ${searchTerm}, roles: ${roles.join(',')}, params: ${queryParams}`);
+    
+    const response = await axiosInstance.get(`/users/search?${queryParams}`);
+    console.log('User search API response:', response.data);
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error searching users:', error);
+    return { data: [] };
+  }
+};
+
+// Funkcja do pobierania szczegółowych danych właściciela zwierzęcia wraz z danymi gospodarstwa
+export const fetchOwnerDetails = async (ownerId: string | number): Promise<any> => {
+  try {
+    console.log(`Fetching owner details for owner ID: ${ownerId}`);
+    
+    // Pobieramy szczegółowe dane właściciela
+    const response = await axiosInstance.get(`/users/owners/${ownerId}/details`);
+    console.log('Owner details API response:', response.data);
+    
+    // Zwracamy dane właściciela wzbogacone o informacje o gospodarstwie i organizacji
+    return response.data.data;
+  } catch (error) {
+    console.error(`Error fetching owner details for ID ${ownerId}:`, error);
+    
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError;
+      console.error('Error response:', {
+        status: axiosError.response?.status,
+        data: axiosError.response?.data,
+        headers: axiosError.response?.headers
+      });
+    }
+    
+    throw error;
+  }
+};

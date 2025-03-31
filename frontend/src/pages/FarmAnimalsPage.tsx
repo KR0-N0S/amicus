@@ -30,20 +30,21 @@ const FarmAnimalsPage: React.FC = () => {
 
   // Pobieranie listy zwierząt gospodarskich
   useEffect(() => {
-    const fetchAnimals = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        const response = await getAnimals(1, 100, 'large');
-        setAnimals(response.data);
-        setFilteredAnimals(response.data);
-      } catch (err: any) {
-        console.error('Error fetching farm animals:', err);
-        setError(err.response?.data?.message || 'Nie udało się pobrać listy zwierząt gospodarskich');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    // Zmiana w fetchAnimals
+const fetchAnimals = async () => {
+  try {
+    setIsLoading(true);
+    setError(null);
+    const response = await getAnimals(1, 100, 'farm'); // Zmieniono 'large' na 'farm'
+    setAnimals(response.data);
+    setFilteredAnimals(response.data);
+  } catch (err: any) {
+    console.error('Error fetching farm animals:', err);
+    setError(err.response?.data?.message || 'Nie udało się pobrać listy zwierząt gospodarskich');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
     fetchAnimals();
   }, []);

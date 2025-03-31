@@ -11,6 +11,12 @@ const { verifyToken } = require('../middleware/authMiddleware');
 const { requireRole } = require('../middleware/roleMiddleware');
 const moduleController = require('../controllers/moduleController');
 
+// Dodajemy import tras dla zwierząt
+const animalRoutes = require('./animalRoutes');
+
+// Montujemy trasy zwierząt pod ścieżką '/animals'
+router.use('/animals', animalRoutes);
+
 /**
  * @swagger
  * /api/modules:

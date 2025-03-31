@@ -199,6 +199,80 @@ async function getSingleUser(userId, withDetails = true) {
   return result.rows[0];
 }
 
+// Funkcja wyszukiwania użytkowników 
+async function searchUsers(searchQuery, roles, organizationId) {
+  console.log(`[USER_REPO] Wyszukiwanie użytkowników: query=${searchQuery}, roles=${roles}, organizationId=${organizationId}`);
+  
+  // Budowanie zapytania SQL
+  let sqlQuery = `
+    SELECT u.*, 
+            array_agg(DISTINCT jsonb_build_object(
+              'id', o.id,
+              'name', o.name,
+              'city', o.city,
+              'street', o.street,
+              'house_number', o.house_number,
+              'role', ou.role
+            )) FILTER (WHERE o.id IS NOT NULL) as organizations,
+            array_agg(DISTINCT jsonb_build_object(
+              'id', h.id,
+              'herd_id', h.herd_id,
+              'eval_herd_no', h.eval_herd_no
+            )) FILTER (WHERE h.id IS NOT NULL) as herds
+     FROM users u
+     JOIN organization_user ou ON u.id = ou.user_id
+     LEFT JOIN organizations o ON ou.organization_id = o.id 
+     LEFT JOIN herds h ON h.owner_id = u.id
+     WHERE ou.organization_id = $1
+  `;
+  
+  const params = [organizationId];
+  let paramIndex = 2;
+  
+  // Filtrowanie po rolach
+  if (roles && roles.length > 0) {
+    // Konwersja na tablicę jeśli to string
+    const roleArray = typeof roles === 'string' ? roles.split(',') : roles;
+    if (roleArray.length > 0) {
+      const rolePlaceholders = roleArray.map((_, idx) => `$${paramIndex + idx}`).join(', ');
+      sqlQuery += ` AND ou.role IN (${rolePlaceholders})`;
+      params.push(...roleArray);
+      paramIndex += roleArray.length;
+    }
+  }
+  
+  // Filtrowanie po frazie wyszukiwania
+  if (searchQuery && searchQuery.trim() !== '') {
+    sqlQuery += ` 
+      AND (
+        u.first_name ILIKE $${paramIndex} 
+        OR u.last_name ILIKE $${paramIndex} 
+        OR u.email ILIKE $${paramIndex}
+        OR CONCAT(u.first_name, ' ', u.last_name) ILIKE $${paramIndex}
+        OR u.street ILIKE $${paramIndex}
+        OR u.house_number ILIKE $${paramIndex}
+        OR u.city ILIKE $${paramIndex}
+        OR u.postal_code ILIKE $${paramIndex}
+        OR u.tax_id ILIKE $${paramIndex}
+        OR u.phone ILIKE $${paramIndex}
+      )
+    `;
+    params.push(`%${searchQuery.trim()}%`);
+  }
+  
+  // Grupowanie i sortowanie
+  sqlQuery += ` 
+    GROUP BY u.id
+    ORDER BY u.last_name, u.first_name
+  `;
+  
+  console.log(`[USER_REPO] SQL Query: ${sqlQuery}`);
+  console.log(`[USER_REPO] Params:`, params);
+  
+  const result = await query(sqlQuery, params);
+  return result.rows;
+}
+
 // Dostarczamy obydwie wersje nazw metod dla kompatybilności
 module.exports = {
   getUserById: findById,
@@ -212,5 +286,6 @@ module.exports = {
   getUsersByOrganization,
   getClientsInOrganization,
   getSingleUser,
-  deactivateUser // Dodajemy nową funkcję do eksportu
+  deactivateUser,
+  searchUsers // Dodajemy nową funkcję do eksportu
 };

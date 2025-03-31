@@ -27,6 +27,8 @@ import CompanionAnimalFormPage from './pages/CompanionAnimalFormPage';
 import FarmAnimalsPage from './pages/FarmAnimalsPage';
 import FarmAnimalDetailsPage from './pages/FarmAnimalDetailsPage';
 import FarmAnimalFormPage from './pages/FarmAnimalFormPage';
+import AnimalsSettingPage from './pages/AnimalSettingsPage';
+import AnimalSettingsPage from './pages/AnimalSettingsPage';
 
 // Styles
 import './assets/css/main.css';
@@ -64,6 +66,8 @@ const App: React.FC = () => {
               <Route path="/animals/farm/new" element={<FarmAnimalFormPage />} />
               <Route path="/animals/farm/:id" element={<FarmAnimalDetailsPage />} />
               <Route path="/animals/farm/:id/edit" element={<FarmAnimalFormPage />} />
+              
+              <Route path="/animals/settings" element={<AnimalsSettingPage />} />
               
               <Route path="/profile" element={<Profile />} />
               <Route path="/settings" element={<Settings />} />

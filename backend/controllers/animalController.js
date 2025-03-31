@@ -25,7 +25,7 @@ exports.getUserAnimals = async (req, res, next) => {
     const ownerId = req.query.owner_id || req.userId;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
-    const animalType = req.query.type; // 'small' lub 'large'
+    const animalType = req.query.type; // 'companion' lub 'farm'
     
     // Jeśli próbujemy pobrać zwierzęta innego użytkownika, sprawdź uprawnienia
     if (ownerId !== req.userId) {
@@ -47,18 +47,27 @@ exports.getUserAnimals = async (req, res, next) => {
 
 exports.createAnimal = async (req, res, next) => {
   try {
+    // Przygotowujemy dane zgodnie z nową strukturą bazy danych
     const animalData = {
+      // Dane podstawowe zwierzęcia
       owner_id: req.body.owner_id || req.userId,
-      animal_number: req.body.animal_number,
-      identifier: req.body.identifier,
+      species: req.body.species,
+      animal_type: req.body.animal_type,
       age: req.body.age,
       sex: req.body.sex,
       breed: req.body.breed,
-      species: req.body.species,
-      animal_type: req.body.animal_type,
       birth_date: req.body.birth_date,
-      photo: req.body.photo
+      weight: req.body.weight,
+      photo: req.body.photo,
+      notes: req.body.notes
     };
+
+    // Dane specyficzne dla typu zwierzęcia
+    if (req.body.animal_type === 'farm' && req.body.farm_animal) {
+      animalData.farm_animal = req.body.farm_animal;
+    } else if (req.body.animal_type === 'companion' && req.body.companion_animal) {
+      animalData.companion_animal = req.body.companion_animal;
+    }
 
     // Jeśli próbujemy dodać zwierzę innemu użytkownikowi, sprawdź uprawnienia
     if (animalData.owner_id !== req.userId) {
@@ -86,17 +95,26 @@ exports.updateAnimal = async (req, res, next) => {
       return next(new AppError('Brak uprawnień do edycji tego zwierzęcia', 403));
     }
     
+    // Przygotowujemy dane zgodnie z nową strukturą bazy danych
     const animalData = {
-      animal_number: req.body.animal_number,
-      identifier: req.body.identifier,
+      // Dane podstawowe zwierzęcia - nie aktualizujemy owner_id
+      species: req.body.species,
+      animal_type: req.body.animal_type || animal.animal_type, // Zachowujemy typ zwierzęcia jeśli nie podano
       age: req.body.age,
       sex: req.body.sex,
       breed: req.body.breed,
-      species: req.body.species,
-      animal_type: req.body.animal_type,
       birth_date: req.body.birth_date,
-      photo: req.body.photo
+      weight: req.body.weight,
+      photo: req.body.photo,
+      notes: req.body.notes
     };
+
+    // Dane specyficzne dla typu zwierzęcia
+    if (animal.animal_type === 'farm' && req.body.farm_animal) {
+      animalData.farm_animal = req.body.farm_animal;
+    } else if (animal.animal_type === 'companion' && req.body.companion_animal) {
+      animalData.companion_animal = req.body.companion_animal;
+    }
 
     const updatedAnimal = await animalService.updateAnimal(animalId, animalData);
 

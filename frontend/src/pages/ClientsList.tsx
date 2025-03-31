@@ -5,7 +5,7 @@ import Card from '../components/common/Card';
 import Table from '../components/common/Table';
 import Button from '../components/common/Button'; // Poprawiony import (wcześniej był components.common/Button)
 import { useAuth } from '../context/AuthContext';
-import { fetchClients } from '../api/clientApi';
+import { fetchClients } from '../api/userApi';
 import { Client, OrganizationWithRole } from '../types/models';
 import './ClientsList.css';
 

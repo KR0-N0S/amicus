@@ -36,8 +36,8 @@ const CompanionAnimalDetailsPage: React.FC = () => {
         
         const data = await getAnimal(Number(id));
         
-        // Sprawdź czy typ zwierzęcia to 'small' (domowe)
-        if (data.animal_type !== 'small') {
+        // Sprawdź czy typ zwierzęcia to 'companion' (domowe)
+        if (data.animal_type !== 'companion') {
           navigate(`/animals/farm/${id}`);
           return;
         }

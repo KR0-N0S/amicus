@@ -13,6 +13,7 @@ dotenv.config();
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const moduleRoutes = require('./routes/moduleRoutes'); // Dodane - import tras dla modułów
+const actionButtonRoutes = require('./routes/actionButtonRoutes'); // Dodane - import tras dla przycisków akcji
 
 // Import middleware
 const { verifyResourceAccess } = require('./middleware/resourceAccessMiddleware');
@@ -112,6 +113,7 @@ app.use(defaultLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api', moduleRoutes); // Dodane - trasy dla modułów (wszystkie zaczynają się od /api)
+app.use('/api/action-buttons', actionButtonRoutes); // Dodane - trasy dla przycisków akcji
 // Pozostałe trasy można dodać później
 
 // Dokumentacja Swagger

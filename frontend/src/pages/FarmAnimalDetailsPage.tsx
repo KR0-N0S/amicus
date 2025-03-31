@@ -35,8 +35,8 @@ const FarmAnimalDetailsPage: React.FC = () => {
         
         const data = await getAnimal(Number(id));
         
-        // Sprawdź czy typ zwierzęcia to 'large' (gospodarskie)
-        if (data.animal_type !== 'large') {
+        // Sprawdź czy typ zwierzęcia to 'farm' (gospodarskie)
+        if (data.animal_type !== 'farm') {
           navigate(`/animals/pets/${id}`);
           return;
         }

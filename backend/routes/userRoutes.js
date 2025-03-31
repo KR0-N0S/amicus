@@ -17,6 +17,7 @@ router.use(verifyToken);
 router.get('/profile', userController.getProfile);
 router.put('/profile', userController.updateProfile);
 router.post('/change-password', userController.changePassword);
+router.get('/search', userController.searchUsers); // Nowy endpoint do wyszukiwania użytkowników
 
 // Pobieranie listy klientów - bez zmian, nie wymaga weryfikacji dostępu do konkretnego zasobu
 router.get('/clients', clientController.getClients);

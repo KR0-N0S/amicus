@@ -21,7 +21,7 @@ const CompanionAnimalFormPage: React.FC = () => {
   const { user } = useAuth();
   
   const [animal, setAnimal] = useState<Partial<Animal>>({
-    animal_type: 'small', // Domyślnie ustawiamy typ na 'small' (domowe)
+    animal_type: 'companion', // Domyślnie ustawiamy typ na 'small' (domowe)
   });
   
   const [isLoading, setIsLoading] = useState<boolean>(isEditMode);
@@ -43,7 +43,7 @@ const CompanionAnimalFormPage: React.FC = () => {
         const data = await getAnimal(Number(id));
         
         // Sprawdź czy typ zwierzęcia to 'small' (domowe)
-        if (data.animal_type !== 'small') {
+        if (data.animal_type !== 'companion') {
           navigate(`/animals/farm/${id}/edit`);
           return;
         }

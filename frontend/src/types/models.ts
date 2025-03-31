@@ -70,40 +70,73 @@ export interface Client extends UserWithDetails {
   herd_evaluation_number?: string;
 }
 
+// Nowy interfejs dla zwierząt gospodarskich
+export interface FarmAnimal {
+  id: number;
+  animal_id: number;
+  identifier?: string;         // Numer kolczyka
+  additional_number?: string;  // Dodatkowy numer identyfikacyjny
+  herd_number?: string;        // Numer stada
+  registration_date?: string;  // Data rejestracji
+  origin?: string;             // Pochodzenie
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Nowy interfejs dla zwierząt towarzyszących
+export interface CompanionAnimal {
+  id: number;
+  animal_id: number;
+  chip_number?: string;        // Numer chipa
+  sterilized?: boolean;        // Czy wysterylizowane
+  passport_number?: string;    // Numer paszportu
+  special_needs?: string;      // Specjalne potrzeby
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Zaktualizowany interfejs Animal dla tabeli głównej
 export interface Animal {
   id: number;
   owner_id: number;
-  animal_number: string;
-  identifier?: string;       // Numer kolczyka lub chip
-  age?: number;
+  species: string;
+  animal_type: 'farm' | 'companion';  // Zaktualizowane z 'small' | 'large'
   sex?: 'male' | 'female' | 'unknown';
   breed?: string;
-  species: string;
-  animal_type: 'small' | 'large';
+  age?: number;
   birth_date?: string;
   photo?: string;
-  created_at: string;
-  
-  // Dodatkowe pola, których brakuje
-  name?: string;
   weight?: number;
-  microchip_number?: string;
   notes?: string;
-  organization_id?: number;
+  created_at?: string;
+  updated_at?: string;
   
-  // Pola dla zwierząt domowych (small)
+  // Relacje do szczegółowych danych
+  farm_animal?: FarmAnimal;       // Dla zwierząt gospodarskich
+  companion_animal?: CompanionAnimal;  // Dla zwierząt towarzyszących
+  
+  // Pola specyficzne dla farm_animals (dla ułatwienia pracy z formularzem)
+  identifier?: string;
+  additional_number?: string;
+  herd_number?: string;
+  registration_date?: string;
+  origin?: string;
+  
+  // Pola dla kompatybilności wstecznej
+  animal_number?: string;
+  
+  // Pola dla kompanion animals (dodamy je później)
+  name?: string;
   color?: string;
+  microchip_number?: string;
   is_sterilized?: boolean;
   sterilization_date?: string;
   special_markings?: string;
   temperament?: string;
   special_needs?: string;
   
-  // Pola dla zwierząt gospodarskich (large)
-  herd_number?: string;
-  registration_date?: string;
-  origin?: string;
-  vaccination_status?: string;
+  // Pola dla kompatybilności z istniejącym kodem
+  organization_id?: number;
 }
 
 export interface Bull {
@@ -176,7 +209,7 @@ export interface ApiResponse<T> {
 export interface AuthResponse {
   status: string;
   data: {
-    user: UserWithDetails; // Zmiana z User na UserWithDetails
+    user: UserWithDetails; 
     organizations?: Organization[];
     token: string;
   }

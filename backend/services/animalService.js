@@ -28,13 +28,9 @@ class AnimalService {
   }
 
   async createAnimal(animalData) {
-    // Walidacja danych (można rozszerzyć)
+    // Walidacja podstawowych danych
     if (!animalData.owner_id) {
       throw new AppError('Brak ID właściciela zwierzęcia', 400);
-    }
-    
-    if (!animalData.animal_number && !animalData.identifier) {
-      throw new AppError('Wymagany jest numer zwierzęcia lub identyfikator', 400);
     }
     
     if (!animalData.species) {
@@ -44,17 +40,67 @@ class AnimalService {
     if (!animalData.animal_type) {
       throw new AppError('Typ zwierzęcia jest wymagany', 400);
     }
+
+    // Sprawdzamy typ zwierzęcia i odpowiednio walidujemy
+    if (animalData.animal_type === 'farm') {
+      // Dla zwierząt gospodarskich wymagany jest identyfikator (kolczyk)
+      if (!animalData.farm_animal?.identifier) {
+        throw new AppError('Numer identyfikacyjny (kolczyk) jest wymagany dla zwierząt gospodarskich', 400);
+      }
+    } else if (animalData.animal_type === 'companion') {
+      // Dla zwierząt towarzyszących możemy mieć inne wymagania
+      // np. chip_number lub passport_number
+    }
     
-    return await animalRepository.create(animalData);
+    // Rozdzielamy dane na te dla tabeli animals i dla tabeli specyficznej dla typu
+    const animalBaseData = {
+      owner_id: animalData.owner_id,
+      species: animalData.species,
+      animal_type: animalData.animal_type,
+      age: animalData.age,
+      sex: animalData.sex,
+      breed: animalData.breed,
+      birth_date: animalData.birth_date,
+      photo: animalData.photo,
+      weight: animalData.weight,
+      notes: animalData.notes
+    };
+    
+    // Dane specyficzne dla typu zostają w odpowiedniej właściwości
+    const specificData = animalData.animal_type === 'farm' 
+      ? animalData.farm_animal 
+      : animalData.companion_animal;
+    
+    return await animalRepository.create(animalBaseData, animalData.animal_type, specificData);
   }
 
   async updateAnimal(id, animalData) {
     const animal = await this.getAnimal(id);
-    return await animalRepository.update(id, animalData);
+    
+    // Rozdzielamy dane na te dla tabeli animals i dla tabeli specyficznej dla typu
+    const animalBaseData = {
+      species: animalData.species,
+      age: animalData.age,
+      sex: animalData.sex,
+      breed: animalData.breed,
+      birth_date: animalData.birth_date,
+      photo: animalData.photo,
+      weight: animalData.weight,
+      notes: animalData.notes
+      // Nie aktualizujemy owner_id ani animal_type - to są stałe wartości
+    };
+    
+    // Dane specyficzne dla typu zostają w odpowiedniej właściwości
+    const specificData = animalData.animal_type === 'farm' 
+      ? animalData.farm_animal 
+      : animalData.companion_animal;
+    
+    return await animalRepository.update(id, animalBaseData, animalData.animal_type, specificData);
   }
 
   async deleteAnimal(id) {
     const animal = await this.getAnimal(id);
+    // Usuwamy tylko z głównej tabeli, kaskadowe usuwanie zajmie się resztą
     return await animalRepository.delete(id);
   }
 }

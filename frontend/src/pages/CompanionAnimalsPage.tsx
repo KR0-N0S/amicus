@@ -34,7 +34,7 @@ const CompanionAnimalsPage: React.FC = () => {
       try {
         setIsLoading(true);
         setError(null);
-        const response = await getAnimals(1, 100, 'small');
+        const response = await getAnimals(1, 100, 'companion');
         setAnimals(response.data);
         setFilteredAnimals(response.data);
       } catch (err: any) {

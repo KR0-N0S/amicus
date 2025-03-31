@@ -56,3 +56,23 @@ exports.changePassword = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.searchUsers = async (req, res, next) => {
+  try {
+    const { query: searchQuery, roles, organizationId } = req.query;
+    
+    if (!organizationId) {
+      return next(new AppError('Brak wymaganego ID organizacji', 400));
+    }
+    
+    const users = await userService.searchUsers(searchQuery, roles, organizationId);
+    
+    res.status(200).json({
+      status: 'success',
+      results: users.length,
+      data: users
+    });
+  } catch (error) {
+    next(error);
+  }
+};

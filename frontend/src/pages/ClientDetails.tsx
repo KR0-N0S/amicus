@@ -6,7 +6,7 @@ import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
 import Tabs, { Tab } from '../components/common/Tabs/Tabs';
 import { useAuth } from '../context/AuthContext';
-import { deactivateClient } from '../api/clientApi';
+import { deactivateClient } from '../api/userApi';
 import { getCurrentUser } from '../utils/auth';
 import useClient from '../hooks/useClient';
 import { Client, OrganizationWithRole } from '../types/models';
