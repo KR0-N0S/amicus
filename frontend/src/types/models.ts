@@ -70,13 +70,12 @@ export interface Client extends UserWithDetails {
   herd_evaluation_number?: string;
 }
 
-// Nowy interfejs dla zwierząt gospodarskich
+// Zaktualizowany interfejs FarmAnimal bez zbędnych pól
 export interface FarmAnimal {
   id: number;
   animal_id: number;
   identifier?: string;         // Numer kolczyka
-  additional_number?: string;  // Dodatkowy numer identyfikacyjny
-  herd_number?: string;        // Numer stada
+  // Usunięto additional_number i herd_number
   registration_date?: string;  // Data rejestracji
   origin?: string;             // Pochodzenie
   created_at?: string;
@@ -96,14 +95,16 @@ export interface CompanionAnimal {
 }
 
 // Zaktualizowany interfejs Animal dla tabeli głównej
+// Zaktualizowany interfejs Animal bez wymaganego pola age
 export interface Animal {
   id: number;
   owner_id: number;
   species: string;
-  animal_type: 'farm' | 'companion';  // Zaktualizowane z 'small' | 'large'
+  animal_type: 'farm' | 'companion';
   sex?: 'male' | 'female' | 'unknown';
   breed?: string;
-  age?: number;
+  // age jest teraz właściwością wyliczaną, nie zapisywaną w bazie
+  age?: number; // Pozostawiamy w interfejsie, ponieważ nadal jest zwracane w odpowiedziach API
   birth_date?: string;
   photo?: string;
   weight?: number;

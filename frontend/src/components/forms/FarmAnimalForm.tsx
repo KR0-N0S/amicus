@@ -52,11 +52,10 @@ const validationSchema = yup.object({
   sex: yup.string().required('Płeć jest wymagana'),
   animal_type: yup.string().required('Typ zwierzęcia jest wymagany'),
   birth_date: yup.date().nullable(),
-  age: yup.number().nullable().integer().min(0, 'Wiek nie może być ujemny'),
-  additional_number: yup.string(), // Zmieniona nazwa pola z animal_number na additional_number
+  // Usunięto walidację dla age, ponieważ pole zostało usunięte z bazy danych
+  additional_number: yup.string(),
   breed: yup.string(),
   weight: yup.number().positive('Waga musi być większa od 0').nullable(),
-  herd_number: yup.string(),
   registration_date: yup.date().nullable(),
   origin: yup.string(),
   notes: yup.string(),
@@ -66,13 +65,13 @@ const validationSchema = yup.object({
     otherwise: () => yup.string()
   })
 }).test(
-  'birth-date-or-age',
-  'Musisz podać datę urodzenia lub wiek',
+  'birth-date',
+  'Data urodzenia jest wymagana',
   function(values) {
-    if (values.birth_date || values.age) {
+    if (values.birth_date) {
       return true;
     }
-    return this.createError({ path: 'birth_date', message: 'Musisz podać datę urodzenia lub wiek' });
+    return this.createError({ path: 'birth_date', message: 'Data urodzenia jest wymagana' });
   }
 );
 
@@ -128,11 +127,28 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
           setOwnerDetails(details);
           
           // Automatyczne uzupełnienie numeru stada, jeśli jest dostępny
-          if (details?.herd?.herd_id) {
-            formik.setFieldValue('herd_number', details.herd.herd_id);
+          if (details?.herds && details.herds.length > 0 && details.herds[0].herd_id) {
+            formik.setFieldValue('herd_number', details.herds[0].herd_id);
           }
         } catch (error) {
           console.error('Błąd podczas pobierania danych właściciela:', error);
+          
+          // Mimo błędu, zachowaj ID właściciela w formularzu
+          formik.setFieldValue('owner_id', selectedOwner.id);
+          
+          // Wyświetl podstawowe informacje na podstawie danych z Autocomplete
+          let ownerName = selectedOwner.label || '';
+          let nameParts = ownerName.split(' - ')[0].trim().split(' ');
+          
+          setOwnerDetails({
+            first_name: nameParts[0] || 'Nieznane',
+            last_name: nameParts.slice(1).join(' ') || 'Nazwisko',
+            email: '',
+            phone: '',
+            city: '',
+            street: '',
+            house_number: ''
+          });
         } finally {
           setIsLoadingOwnerDetails(false);
         }
@@ -156,17 +172,17 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
   const formik = useFormik({
     initialValues: {
       // Pola z głównej tabeli animals
-      animal_type: 'farm', // Zmieniono z 'large' na 'farm' dla lepszej czytelności
+      animal_type: 'farm',
       species: initialValues.species || 'bydło',
       breed: initialValues.breed || '',
       sex: initialValues.sex || '',
       birth_date: initialValues.birth_date ? new Date(initialValues.birth_date) : null,
-      age: initialValues.age || '',
+      // Usunięto pole age - będzie dynamicznie obliczane na podstawie daty urodzenia
       weight: initialValues.weight || '',
       
       // Pola specyficzne dla farm_animals
-      identifier: initialValues.identifier || '',
-      additional_number: initialValues.additional_number || '', // Zmiana nazwy pola
+      identifier: initialValues.farm_animal?.identifier || initialValues.identifier || '',
+      additional_number: initialValues.additional_number || '',
       herd_number: initialValues.herd_number || '',
       registration_date: initialValues.registration_date ? new Date(initialValues.registration_date) : null,
       origin: initialValues.origin || '',
@@ -178,6 +194,12 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
     },
     validationSchema,
     onSubmit: (values) => {
+      // Upewnij się, że identifier ma wartość
+      if (!values.identifier) {
+        formik.setFieldError('identifier', 'Numer identyfikacyjny (kolczyk) jest wymagany');
+        return;
+      }
+
       // Przygotowanie danych do wysłania - rozdzielamy na dane główne i dane farm_animals
       const commonAnimalData = {
         // Dane do tabeli animals
@@ -186,19 +208,22 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
         sex: values.sex,
         breed: values.breed,
         birth_date: values.birth_date,
-        age: values.age,
-        weight: values.weight,
+        // Usunięto pole age - będzie obliczane na backendzie
+        weight: values.weight ? Number(values.weight) : null,
         owner_id: isFarmerOrClient ? undefined : values.owner_id,
         notes: values.notes,
+        // Dodano animal_number jako kopię identyfikatora - wymagane przez API
+        animal_number: values.identifier,
       };
       
       const farmAnimalData = {
         // Dane do tabeli farm_animals
         identifier: values.identifier,
-        additional_number: values.additional_number, // Zmieniona nazwa pola
-        herd_number: isFarmerOrClient ? undefined : values.herd_number,
+        // Usunięto zbędne pola dodatkowe, które są pobierane z danych właściciela
         registration_date: values.registration_date,
         origin: values.origin,
+        // Dodatkowy identyfikator jako opcjonalne pole
+        additional_id: values.additional_number || null,
       };
       
       // Łączymy dane do wysłania do API
@@ -206,6 +231,8 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
         ...commonAnimalData,
         farm_animal: farmAnimalData
       };
+      
+      console.log('Przesyłane dane zwierzęcia:', combinedData);
       
       // Wywołanie funkcji onSubmit z komponentu nadrzędnego
       onSubmit(combinedData);
@@ -305,27 +332,24 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
                     </Grid>
                     
                     <Grid item xs={12} md={6}>
-                      {ownerDetails.herd && (
+                      {ownerDetails.herds && ownerDetails.herds.length > 0 && (
                         <>
                           <Typography variant="body2">
-                            <strong>Numer stada:</strong> {ownerDetails.herd.herd_id || 'Brak'}
+                            <strong>Numer stada:</strong> {ownerDetails.herds[0].herd_id || 'Brak'}
                           </Typography>
                           <Typography variant="body2">
-                            <strong>Numer pod oceną:</strong> {ownerDetails.herd.eval_herd_no || 'Brak'}
-                          </Typography>
-                          <Typography variant="body2">
-                            <strong>Adres gospodarstwa:</strong> {ownerDetails.herd.city || ''}, {ownerDetails.herd.street || ''} {ownerDetails.herd.house_number || ''}
+                            <strong>Numer pod oceną:</strong> {ownerDetails.herds[0].eval_herd_no || 'Brak'}
                           </Typography>
                         </>
                       )}
                       
-                      {ownerDetails.organization && (
+                      {ownerDetails.organizations && ownerDetails.organizations.length > 0 && (
                         <>
                           <Typography variant="body2">
-                            <strong>Firma:</strong> {ownerDetails.organization.name || 'Brak'}
+                            <strong>Firma:</strong> {ownerDetails.organizations[0].name || 'Brak'}
                           </Typography>
                           <Typography variant="body2">
-                            <strong>NIP:</strong> {ownerDetails.organization.tax_id || 'Brak'}
+                            <strong>NIP:</strong> {ownerDetails.organizations[0].tax_id || 'Brak'}
                           </Typography>
                         </>
                       )}
@@ -356,10 +380,11 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
               onChange={formik.handleChange}
               error={formik.touched.identifier && Boolean(formik.errors.identifier)}
               helperText={formik.touched.identifier && formik.errors.identifier as string}
+              required
             />
           </Grid>
           
-          {/* Numer dodatkowy (zamiast Numer zwierzęcia) */}
+          {/* Numer dodatkowy (opcjonalny) */}
           <Grid item xs={12} md={6}>
             <TextField
               fullWidth
@@ -373,28 +398,31 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
             />
           </Grid>
           
-          {/* Gatunek - domyślnie bydło */}
+          {/* Gatunek */}
           <Grid item xs={12} md={6}>
             <TextField
               fullWidth
               id="species"
               name="species"
               label="Gatunek *"
+              select
               value={formik.values.species}
               onChange={formik.handleChange}
               error={formik.touched.species && Boolean(formik.errors.species)}
               helperText={formik.touched.species && formik.errors.species as string}
-              select
+              required
             >
               <MenuItem value="bydło">Bydło</MenuItem>
               <MenuItem value="świnia">Świnia</MenuItem>
-              <MenuItem value="koń">Koń</MenuItem>
               <MenuItem value="owca">Owca</MenuItem>
               <MenuItem value="koza">Koza</MenuItem>
+              <MenuItem value="koń">Koń</MenuItem>
+              <MenuItem value="drób">Drób</MenuItem>
               <MenuItem value="inne">Inne</MenuItem>
             </TextField>
           </Grid>
           
+          {/* Rasa */}
           <Grid item xs={12} md={6}>
             <TextField
               fullWidth
@@ -408,15 +436,15 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
             />
           </Grid>
           
+          {/* Płeć */}
           <Grid item xs={12} md={6}>
-            <FormControl component="fieldset" sx={{ display: 'flex', justifyContent: 'space-around', width: '100%' }}>
+            <FormControl component="fieldset" error={formik.touched.sex && Boolean(formik.errors.sex)}>
               <FormLabel component="legend">Płeć *</FormLabel>
               <RadioGroup
                 row
                 name="sex"
                 value={formik.values.sex}
                 onChange={formik.handleChange}
-                sx={{ justifyContent: 'center' }}
               >
                 <FormControlLabel value="male" control={<Radio />} label="Samiec" />
                 <FormControlLabel value="female" control={<Radio />} label="Samica" />
@@ -430,38 +458,27 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
             </FormControl>
           </Grid>
           
+          {/* Data urodzenia */}
           <Grid item xs={12} md={6}>
             <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pl">
               <DatePicker
-                label="Data urodzenia"
+                label="Data urodzenia *"
                 value={formik.values.birth_date ? dayjs(formik.values.birth_date) : null}
-                onChange={(date) => formik.setFieldValue('birth_date', date ? date.toDate() : null)}
+                onChange={(newValue) => {
+                  formik.setFieldValue('birth_date', newValue ? newValue.toDate() : null);
+                }}
                 slotProps={{
                   textField: {
-                    variant: 'outlined',
                     fullWidth: true,
                     error: formik.touched.birth_date && Boolean(formik.errors.birth_date),
-                    helperText: formik.touched.birth_date && formik.errors.birth_date as string
+                    helperText: formik.touched.birth_date && formik.errors.birth_date as string,
                   }
                 }}
               />
             </LocalizationProvider>
           </Grid>
           
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              id="age"
-              name="age"
-              label="Wiek (lata)"
-              type="number"
-              value={formik.values.age}
-              onChange={formik.handleChange}
-              error={formik.touched.age && Boolean(formik.errors.age)}
-              helperText={formik.touched.age && formik.errors.age as string}
-            />
-          </Grid>
-          
+          {/* Waga */}
           <Grid item xs={12} md={6}>
             <TextField
               fullWidth
@@ -469,6 +486,7 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
               name="weight"
               label="Waga (kg)"
               type="number"
+              inputProps={{ min: 0, step: 0.1 }}
               value={formik.values.weight}
               onChange={formik.handleChange}
               error={formik.touched.weight && Boolean(formik.errors.weight)}
@@ -478,48 +496,31 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
         </Grid>
       </Box>
       
-      <Divider sx={{ my: 3 }} />
-
       <Box mb={3}>
         <Typography variant="h6" gutterBottom>
-          Informacje o stadzie i rejestracji
+          Informacje o rejestracji
         </Typography>
         <Grid container spacing={3}>
-          {/* Numer stada - widoczny tylko dla ról administracyjnych */}
-          {isAdminRole && (
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                id="herd_number"
-                name="herd_number"
-                label="Numer stada"
-                value={formik.values.herd_number}
-                onChange={formik.handleChange}
-                error={formik.touched.herd_number && Boolean(formik.errors.herd_number)}
-                helperText={formik.touched.herd_number && formik.errors.herd_number as string}
-              />
-            </Grid>
-          )}
           {/* Data rejestracji */}
           <Grid item xs={12} md={6}>
             <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pl">
               <DatePicker
                 label="Data rejestracji"
                 value={formik.values.registration_date ? dayjs(formik.values.registration_date) : null}
-                onChange={(date) =>
-                  formik.setFieldValue('registration_date', date ? date.toDate() : null)
-                }
+                onChange={(newValue) => {
+                  formik.setFieldValue('registration_date', newValue ? newValue.toDate() : null);
+                }}
                 slotProps={{
                   textField: {
-                    variant: 'outlined',
                     fullWidth: true,
                     error: formik.touched.registration_date && Boolean(formik.errors.registration_date),
                     helperText: formik.touched.registration_date && formik.errors.registration_date as string,
-                  },
+                  }
                 }}
               />
             </LocalizationProvider>
           </Grid>
+          
           {/* Pochodzenie */}
           <Grid item xs={12} md={6}>
             <TextField
@@ -535,28 +536,43 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
           </Grid>
         </Grid>
       </Box>
-
-      <Divider sx={{ my: 3 }} />
-
-      {/* Sekcja notatek */}
+      
       <Box mb={3}>
-        <TextField
-          fullWidth
-          id="notes"
-          name="notes"
-          label="Dodatkowe uwagi"
-          multiline
-          rows={4}
-          value={formik.values.notes}
-          onChange={formik.handleChange}
-          error={formik.touched.notes && Boolean(formik.errors.notes)}
-          helperText={formik.touched.notes && formik.errors.notes as string}
-        />
+        <Typography variant="h6" gutterBottom>
+          Dodatkowe informacje
+        </Typography>
+        <Grid container spacing={3}>
+          {/* Notatki */}
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              id="notes"
+              name="notes"
+              label="Notatki"
+              multiline
+              rows={4}
+              value={formik.values.notes}
+              onChange={formik.handleChange}
+              error={formik.touched.notes && Boolean(formik.errors.notes)}
+              helperText={formik.touched.notes && formik.errors.notes as string}
+            />
+          </Grid>
+        </Grid>
       </Box>
-
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-        <Button type="submit" variant="contained" color="primary" disabled={isSubmitting}>
-          {isEditMode ? 'Zaktualizuj zwierzę' : 'Dodaj zwierzę'}
+      
+      <Box display="flex" justifyContent="flex-end" mt={4}>
+        <Button
+          type="submit"
+          variant="contained"
+          color="primary"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <>
+              <CircularProgress size={20} color="inherit" sx={{ mr: 1 }} />
+              Zapisywanie...
+            </>
+          ) : isEditMode ? 'Zapisz zmiany' : 'Dodaj zwierzę'}
         </Button>
       </Box>
     </form>

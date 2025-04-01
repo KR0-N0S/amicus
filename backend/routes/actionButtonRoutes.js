@@ -8,8 +8,8 @@ const router = express.Router();
 // Wszystkie ścieżki wymagają uwierzytelnienia
 router.use(verifyToken);
 
-// Ograniczenie dostępu tylko dla określonych ról
-router.use(requireRole(['SuperAdmin', 'Admin', 'Owner', 'OfficeStaff', 'Inseminator']));
+// Ograniczenie dostępu tylko dla określonych ról, ALE BEZ WYMAGANIA organizationId
+router.use(requireRole(['SuperAdmin', 'Admin', 'Owner', 'OfficeStaff', 'Inseminator'], false));
 
 // Ścieżki dla przycisków akcji
 router.get('/', actionButtonController.getUserActionButtons);

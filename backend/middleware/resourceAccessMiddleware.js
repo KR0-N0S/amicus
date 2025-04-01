@@ -1,7 +1,7 @@
 /**
  * Middleware do weryfikacji dostępu do zasobów na podstawie przynależności organizacyjnej
  * @author KR0-N0S
- * @date 2025-03-28
+ * @date 2025-04-01 (zaktualizowano)
  */
 
 const { AppError } = require('./errorHandler');
@@ -140,11 +140,59 @@ exports.verifyResourceAccess = (options = {}) => {
             throw dbError; // Przekaż błąd dalej do głównej obsługi błędów
           }
           
-        case 'animal':
-          tableName = 'animals';
-          resourceColumn = 'id';
-          orgColumn = 'organization_id';
-          break;
+// W części switch dla typu 'animal'
+case 'animal':
+  // Specjalna obsługa dla zwierząt - sprawdzanie przez właściciela
+  try {
+    // Pobierz właściciela zwierzęcia i sprawdź czy należy do tej organizacji
+    const animalQuery = await db.query(`
+      SELECT a.id, a.owner_id 
+      FROM animals a
+      WHERE a.id = $1
+    `, [resourceId]);
+
+    if (animalQuery.rows.length === 0) {
+      console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Nie znaleziono zwierzęcia o ID ${resourceId}`);
+      return res.status(404).json({
+        status: 'error',
+        message: 'Żądane zwierzę nie istnieje'
+      });
+    }
+
+    const animal = animalQuery.rows[0];
+    const ownerId = animal.owner_id;
+
+    // Sprawdź, czy właściciel zwierzęcia należy do tej samej organizacji
+    const ownerQuery = await db.query(`
+      SELECT ou.user_id
+      FROM organization_user ou
+      WHERE ou.user_id = $1 AND ou.organization_id = $2
+    `, [ownerId, organizationId]);
+
+    // Jeśli brak relacji właściciela z organizacją i to nie jest sam właściciel
+    if (ownerQuery.rows.length === 0 && req.userId.toString() !== ownerId.toString()) {
+      console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Właściciel zwierzęcia (${ownerId}) nie należy do organizacji ${organizationId}`);
+      return res.status(404).json({
+        status: 'error',
+        message: 'Żądane zwierzę nie należy do Twojej organizacji'
+      });
+    }
+
+    // Jeśli użytkownik jest klientem/farmerem, sprawdź czy jest właścicielem zwierzęcia
+    if ((userRoleInOrg === 'client' || userRoleInOrg === 'farmer') && 
+        req.userId.toString() !== ownerId.toString()) {
+      console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Klient/farmer ${req.userId} próbuje uzyskać dostęp do zwierzęcia należącego do innego właściciela ${ownerId}`);
+      return res.status(403).json({
+        status: 'error',
+        message: 'Brak uprawnień do tego zwierzęcia'
+      });
+    }
+
+    return next();
+  } catch (dbError) {
+    console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Błąd bazy danych przy weryfikacji dostępu do zwierzęcia:`, dbError);
+    throw dbError;
+  }
           
         case 'visit':
           tableName = 'visits';
@@ -178,7 +226,7 @@ exports.verifyResourceAccess = (options = {}) => {
           });
       }
 
-      // Jeśli to nie była specjalna obsługa dla użytkowników, wykonaj standardowe sprawdzenie
+      // Jeśli to nie była specjalna obsługa dla użytkowników lub zwierząt, wykonaj standardowe sprawdzenie
       if (tableName) {
         try {
           const query = await db.query(`

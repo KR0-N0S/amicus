@@ -2,7 +2,7 @@ const express = require('express');
 const animalController = require('../controllers/animalController');
 const { verifyToken } = require('../middleware/authMiddleware');
 const { animalValidator } = require('../middleware/validator');
-const { verifyResourceAccess } = require('../middleware/resourceAccessMiddleware'); // Dodane
+const { verifyResourceAccess } = require('../middleware/resourceAccessMiddleware');
 
 const router = express.Router();
 
@@ -13,25 +13,32 @@ router.use(verifyToken);
  * @swagger
  * [pominięto dokumentację dla zwięzłości]
  */
-// Pobieranie listy zwierząt - bez zmian
-router.get('/', animalController.getUserAnimals);
+// Pobieranie listy zwierząt - dodajemy middleware dla dostępu do organizacji
+router.get('/', 
+  verifyResourceAccess({ resourceType: 'animal' }), // Dodane middleware
+  animalController.getUserAnimals
+);
 
-// Tworzenie zwierzęcia - bez zmian, nie wymaga weryfikacji dostępu do konkretnego zasobu
-router.post('/', animalValidator, animalController.createAnimal);
+// Tworzenie zwierzęcia
+router.post('/', 
+  animalValidator, 
+  verifyResourceAccess({ resourceType: 'animal' }), // Dodane middleware
+  animalController.createAnimal
+);
 
-// Dodanie middleware weryfikującego dostęp do zwierzęcia
+// Middleware weryfikujące dostęp do zwierzęcia
 router.get('/:id', 
   verifyResourceAccess({ resourceType: 'animal', paramName: 'id' }),
   animalController.getAnimal
 );
 
-// Dodanie middleware weryfikującego dostęp do zwierzęcia przed aktualizacją
+// Middleware weryfikujące dostęp do zwierzęcia przed aktualizacją
 router.put('/:id', 
   verifyResourceAccess({ resourceType: 'animal', paramName: 'id' }),
   animalController.updateAnimal
 );
 
-// Dodanie middleware weryfikującego dostęp do zwierzęcia przed usunięciem
+// Middleware weryfikujące dostęp do zwierzęcia przed usunięciem
 router.delete('/:id', 
   verifyResourceAccess({ resourceType: 'animal', paramName: 'id' }),
   animalController.deleteAnimal

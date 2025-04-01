@@ -316,23 +316,33 @@ export const searchUsers = async (searchTerm: string, roles: string[] = ['farmer
   }
 };
 
-// Funkcja do pobierania szczegółowych danych właściciela zwierzęcia wraz z danymi gospodarstwa
 export const fetchOwnerDetails = async (ownerId: string | number): Promise<any> => {
   try {
-    console.log(`Fetching owner details for owner ID: ${ownerId}`);
+    console.log(`Pobieranie danych właściciela o ID: ${ownerId}`);
     
-    // Pobieramy szczegółowe dane właściciela
-    const response = await axiosInstance.get(`/users/owners/${ownerId}/details`);
-    console.log('Owner details API response:', response.data);
+    // Używamy poprawnego endpointu zgodnie ze specyfikacją API
+    const response = await axiosInstance.get(`/users/clients/${ownerId}`);
     
-    // Zwracamy dane właściciela wzbogacone o informacje o gospodarstwie i organizacji
-    return response.data.data;
+    if (!response.data || !response.data.data || !response.data.data.client) {
+      throw new Error('Nieprawidłowa struktura odpowiedzi API');
+    }
+    
+    const client = response.data.data.client;
+    console.log('Pobrano dane właściciela:', client);
+    
+    // Mapujemy tablicę herds[0] na pole herd dla zachowania kompatybilności z istniejącym kodem
+    const clientWithHerd = {
+      ...client,
+      herd: client.herds && client.herds.length > 0 ? client.herds[0] : { herd_id: '', eval_herd_no: '' }
+    };
+    
+    return clientWithHerd;
   } catch (error) {
-    console.error(`Error fetching owner details for ID ${ownerId}:`, error);
+    console.error(`Błąd pobierania danych właściciela o ID ${ownerId}:`, error);
     
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError;
-      console.error('Error response:', {
+      console.error('Odpowiedź serwera:', {
         status: axiosError.response?.status,
         data: axiosError.response?.data,
         headers: axiosError.response?.headers

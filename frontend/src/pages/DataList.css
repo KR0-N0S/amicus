@@ -193,3 +193,40 @@
     justify-content: space-between;
   }
 }
+/* Styl dla klikalnego wiersza */
+.clickable-row {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.clickable-row:hover {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Styl dla nieaktywnych danych */
+.text-secondary {
+  color: #888;
+  font-style: italic;
+}
+/* Style dla komponentów paginacji */
+.MuiPagination-root {
+  margin-top: 20px;
+  margin-bottom: 10px;
+}
+
+.MuiPagination-ul {
+  justify-content: center;
+}
+
+/* Aby przyciski paginacji były bardziej widoczne */
+.MuiPaginationItem-root {
+  font-weight: 500;
+}
+
+/* Style dla informacji o paginacji */
+.pagination-info {
+  text-align: center;
+  color: #666;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+}

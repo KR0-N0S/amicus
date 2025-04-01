@@ -2,6 +2,29 @@ const animalRepository = require('../repositories/animalRepository');
 const { AppError } = require('../middleware/errorHandler');
 
 class AnimalService {
+  /**
+   * Wylicza wiek na podstawie daty urodzenia
+   * @param {Date|string} birthDate - Data urodzenia
+   * @returns {number|null} - Wyliczony wiek lub null jeśli brak daty urodzenia
+   */
+  calculateAge(birthDate) {
+    if (!birthDate) return null;
+    
+    const birthDateObj = new Date(birthDate);
+    const today = new Date();
+    let age = today.getFullYear() - birthDateObj.getFullYear();
+    
+    // Korekta wieku jeśli urodziny jeszcze nie nastąpiły w tym roku
+    if (
+      today.getMonth() < birthDateObj.getMonth() || 
+      (today.getMonth() === birthDateObj.getMonth() && today.getDate() < birthDateObj.getDate())
+    ) {
+      age--;
+    }
+    
+    return age < 0 ? 0 : age;
+  }
+
   async getAnimal(id) {
     const animal = await animalRepository.findById(id);
     if (!animal) {
@@ -27,37 +50,69 @@ class AnimalService {
     };
   }
 
-  async createAnimal(animalData) {
-    // Walidacja podstawowych danych
-    if (!animalData.owner_id) {
-      throw new AppError('Brak ID właściciela zwierzęcia', 400);
-    }
+  /**
+   * Pobiera zwierzęta należące do wszystkich użytkowników w danej organizacji
+   * @param {number} organizationId - ID organizacji
+   * @param {number} page - Numer strony (paginacja)
+   * @param {number} limit - Liczba elementów na stronę
+   * @param {string} animalType - Opcjonalny filtr typu zwierzęcia ('farm' lub 'companion')
+   * @returns {Object} - Obiekt zawierający listę zwierząt i dane paginacji
+   */
+  async getOrganizationAnimals(organizationId, page = 1, limit = 10, animalType = null) {
+    const offset = (page - 1) * limit;
+    const animals = await animalRepository.findByOrganizationId(organizationId, limit, offset, animalType);
+    const totalCount = await animalRepository.countByOrganizationId(organizationId, animalType);
+    const totalPages = Math.ceil(totalCount / limit);
     
-    if (!animalData.species) {
-      throw new AppError('Gatunek zwierzęcia jest wymagany', 400);
-    }
-    
-    if (!animalData.animal_type) {
-      throw new AppError('Typ zwierzęcia jest wymagany', 400);
-    }
-
-    // Sprawdzamy typ zwierzęcia i odpowiednio walidujemy
-    if (animalData.animal_type === 'farm') {
-      // Dla zwierząt gospodarskich wymagany jest identyfikator (kolczyk)
-      if (!animalData.farm_animal?.identifier) {
-        throw new AppError('Numer identyfikacyjny (kolczyk) jest wymagany dla zwierząt gospodarskich', 400);
+    return {
+      animals,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages
       }
-    } else if (animalData.animal_type === 'companion') {
-      // Dla zwierząt towarzyszących możemy mieć inne wymagania
-      // np. chip_number lub passport_number
+    };
+  }
+
+// Funkcja create z poprawioną obsługą identyfikatora kolczyka
+async createAnimal(animalData) {
+  // Walidacja podstawowych danych
+  if (!animalData.owner_id) {
+    throw new AppError('Brak ID właściciela zwierzęcia', 400);
+  }
+  
+  if (!animalData.species) {
+    throw new AppError('Gatunek zwierzęcia jest wymagany', 400);
+  }
+  
+  if (!animalData.animal_type) {
+    throw new AppError('Typ zwierzęcia jest wymagany', 400);
+  }
+
+  // Dla wstecznej kompatybilności - jeśli mamy animal_number, ale nie mamy farm_animal.identifier
+  if (animalData.animal_type === 'farm') {
+    // Jeśli nie ma obiektu farm_animal, tworzymy go
+    if (!animalData.farm_animal) {
+      animalData.farm_animal = {};
     }
+    
+    // Sprawdzamy czy mamy identifier w farm_animal, jeśli nie, używamy animal_number
+    if (!animalData.farm_animal.identifier && animalData.animal_number) {
+      animalData.farm_animal.identifier = animalData.animal_number;
+    }
+    
+    // Dla zwierząt gospodarskich wymagany jest identyfikator (kolczyk)
+    if (!animalData.farm_animal.identifier) {
+      throw new AppError('Numer identyfikacyjny (kolczyk) jest wymagany dla zwierząt gospodarskich', 400);
+    }
+  }
     
     // Rozdzielamy dane na te dla tabeli animals i dla tabeli specyficznej dla typu
     const animalBaseData = {
       owner_id: animalData.owner_id,
       species: animalData.species,
       animal_type: animalData.animal_type,
-      age: animalData.age,
       sex: animalData.sex,
       breed: animalData.breed,
       birth_date: animalData.birth_date,
@@ -80,14 +135,13 @@ class AnimalService {
     // Rozdzielamy dane na te dla tabeli animals i dla tabeli specyficznej dla typu
     const animalBaseData = {
       species: animalData.species,
-      age: animalData.age,
       sex: animalData.sex,
       breed: animalData.breed,
       birth_date: animalData.birth_date,
       photo: animalData.photo,
       weight: animalData.weight,
       notes: animalData.notes
-      // Nie aktualizujemy owner_id ani animal_type - to są stałe wartości
+      // Pole age zostało usunięte - wiek będzie wyliczany dynamicznie
     };
     
     // Dane specyficzne dla typu zostają w odpowiedniej właściwości
@@ -100,7 +154,6 @@ class AnimalService {
 
   async deleteAnimal(id) {
     const animal = await this.getAnimal(id);
-    // Usuwamy tylko z głównej tabeli, kaskadowe usuwanie zajmie się resztą
     return await animalRepository.delete(id);
   }
 }

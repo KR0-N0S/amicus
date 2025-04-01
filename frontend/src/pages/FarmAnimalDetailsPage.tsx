@@ -157,46 +157,29 @@ const FarmAnimalDetailsPage: React.FC = () => {
         actions={cardActions}
       >
         {/* Podstawowe informacje */}
-        <Paper elevation={0} sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" gutterBottom>Podstawowe informacje</Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2">Numer identyfikacyjny (kolczyk)</Typography>
-              <Typography variant="body1">{animal.identifier || '-'}</Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2">Numer zwierzęcia</Typography>
-              <Typography variant="body1">{animal.animal_number || '-'}</Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2">Gatunek</Typography>
-              <Typography variant="body1">{animal.species}</Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2">Rasa</Typography>
-              <Typography variant="body1">{animal.breed || '-'}</Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2">Płeć</Typography>
-              <Typography variant="body1">
-                {animal.sex === 'male' ? 'Samiec' : 
-                 animal.sex === 'female' ? 'Samica' : 
-                 'Nieznana'}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2">Data urodzenia</Typography>
-              <Typography variant="body1">
-                {animal.birth_date ? new Date(animal.birth_date).toLocaleDateString('pl-PL') : 
-                 (animal.age ? `${animal.age} lat` : '-')}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2">Waga</Typography>
-              <Typography variant="body1">{animal.weight ? `${animal.weight} kg` : '-'}</Typography>
-            </Grid>
-          </Grid>
-        </Paper>
+        // Tylko zmieniony fragment kodu - część wyświetlająca dane o stadzie i rejestracji
+
+{/* Informacje o stadzie i rejestracji */}
+<Paper elevation={0} sx={{ p: 3, mb: 3 }}>
+  <Typography variant="h6" gutterBottom>Informacje o rejestracji</Typography>
+  <Grid container spacing={2}>
+    <Grid item xs={12} md={6}>
+      <Typography variant="subtitle2">Data rejestracji</Typography>
+      <Typography variant="body1">
+        {animal.farm_animal?.registration_date ? 
+         new Date(animal.farm_animal.registration_date).toLocaleDateString('pl-PL') : '-'}
+      </Typography>
+    </Grid>
+    <Grid item xs={12} md={6}>
+      <Typography variant="subtitle2">Pochodzenie</Typography>
+      <Typography variant="body1">{animal.farm_animal?.origin || '-'}</Typography>
+    </Grid>
+    <Grid item xs={12} md={6}>
+      <Typography variant="subtitle2">Status szczepień</Typography>
+      <Typography variant="body1">{(animal as any).vaccination_status || '-'}</Typography>
+    </Grid>
+  </Grid>
+</Paper>
         
         {/* Informacje o stadzie i rejestracji */}
         <Paper elevation={0} sx={{ p: 3, mb: 3 }}>
