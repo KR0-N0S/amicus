@@ -70,12 +70,12 @@ export interface Client extends UserWithDetails {
   herd_evaluation_number?: string;
 }
 
-// Zaktualizowany interfejs FarmAnimal bez zbędnych pól
+// Zaktualizowany interfejs FarmAnimal z dodanym polem additional_id
 export interface FarmAnimal {
   id: number;
   animal_id: number;
   identifier?: string;         // Numer kolczyka
-  // Usunięto additional_number i herd_number
+  additional_id?: string;      // Dodatkowy identyfikator
   registration_date?: string;  // Data rejestracji
   origin?: string;             // Pochodzenie
   created_at?: string;

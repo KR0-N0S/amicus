@@ -55,9 +55,18 @@ const swaggerOptions = {
 const swaggerDocs = swaggerJsDoc(swaggerOptions);
 
 // Poprawiona konfiguracja CORS
+const allowedOrigins = ['http://83.150.236.135', 'http://83.150.236.135:3000'];
+
 const corsOptions = {
-  origin: 'http://83.150.236.135:3000',  // dokładny adres frontendu
-  credentials: true,  // kluczowe dla obsługi cookies
+  origin: (origin, callback) => {
+    // Jeżeli nie ma origin (np. zapytania z narzędzi typu curl), albo origin jest dozwolony
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true, // kluczowe dla obsługi cookies
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // Dodano PATCH
   allowedHeaders: ['Content-Type', 'Authorization', 'X-HTTP-Method-Override'] // Dodano X-HTTP-Method-Override
 };

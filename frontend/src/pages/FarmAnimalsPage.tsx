@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FaPlus, FaSearch, FaEdit, FaEye, FaArrowLeft, FaArrowRight } from 'react-icons/fa';
 import { 
@@ -29,10 +29,15 @@ interface ExtendedAnimal extends Animal {
   owner_name?: string;
   owner_first_name?: string;
   owner_last_name?: string;
+  owner_city?: string;
+  owner_street?: string;
+  owner_house_number?: string;
   identifier?: string; // Dla numeru kolczyka
 }
 
 const ITEMS_PER_PAGE = 25; // Liczba zwierząt na stronę
+const SEARCH_DEBOUNCE_TIME = 300; // Czas debounce w ms
+const MIN_SEARCH_LENGTH = 3; // Minimalna długość frazy wyszukiwania
 
 const FarmAnimalsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -47,6 +52,9 @@ const FarmAnimalsPage: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const navigate = useNavigate();
+  
+  // Używamy useRef do przechowywania timera debounce
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Funkcja do formatowania wieku
   const formatAge = (birthDate: string | null | undefined): string => {
@@ -90,66 +98,91 @@ const FarmAnimalsPage: React.FC = () => {
     return plural5plus;
   };
 
-  // Pobieranie listy zwierząt gospodarskich
-const fetchAnimals = useCallback(async (page: number, search = '') => {
-  try {
-    setIsLoading(true);
-    setError(null);
+  // Funkcja formatująca dane właściciela
+  const formatOwnerInfo = (animal: ExtendedAnimal): string => {
+    // Imię i nazwisko właściciela
+    const ownerName = animal.owner_name || 
+      (animal.owner_first_name && animal.owner_last_name ? 
+        `${animal.owner_first_name} ${animal.owner_last_name}` : null);
     
-    // Aktualizujemy parametry URL, aby zapewnić możliwość odświeżenia strony i zachowania kontekstu
-    const newSearchParams = new URLSearchParams();
-    newSearchParams.set('page', page.toString());
-    if (search) newSearchParams.set('search', search);
-    setSearchParams(newSearchParams);
-    
-    // Przekazujemy obiekt searchParams zamiast samego stringa
-    const searchParamsObj = search ? { search } : undefined;
-    
-    // Pobieramy dane z paginacją - poprawione wywołanie
-    const response = await getAnimals(page, ITEMS_PER_PAGE, 'farm', searchParamsObj);
-    
-    // Dane zwierząt są w response.data
-    let animalsList = response.data || [];
-    
-    // Filtrowanie po stronie klienta jeśli podano frazę wyszukiwania
-    if (search) {
-      const lowerCaseSearch = search.toLowerCase();
-      const filtered = animalsList.filter((animal: ExtendedAnimal) => 
-        ((animal.farm_animal?.identifier || animal.animal_number || '').toLowerCase().includes(lowerCaseSearch)) ||
-        ((animal.owner_name || '').toLowerCase().includes(lowerCaseSearch)) ||
-        ((animal.species || '').toLowerCase().includes(lowerCaseSearch))
-      );
-      animalsList = filtered;
+    // Adres właściciela
+    let address = '';
+    if (animal.owner_city) {
+      address = animal.owner_city;
+      if (animal.owner_street) {
+        address += `, ul. ${animal.owner_street}`;
+        if (animal.owner_house_number) {
+          address += ` ${animal.owner_house_number}`;
+        }
+      }
     }
     
-    // Informacje o paginacji są w response.pagination
-    const paginationInfo = response.pagination || {};
-    const totalCount = paginationInfo.totalCount || animalsList.length;
-    const calculatedTotalPages = paginationInfo.totalPages || Math.ceil(totalCount / ITEMS_PER_PAGE);
+    if (ownerName) {
+      return `${ownerName}${address ? `\n${address}` : ''}`;
+    }
     
-    console.log(`Pobrano ${animalsList.length} z ${totalCount} zwierząt (strona ${page}/${calculatedTotalPages})`);
+    // Jeśli nie mamy danych właściciela, ale mamy owner_id
+    if (animal.owner_id) {
+      return `ID: ${animal.owner_id}`;
+    }
     
-    setAnimals(animalsList);
-    setTotalPages(calculatedTotalPages > 0 ? calculatedTotalPages : 1);
-    setTotalItems(totalCount);
-    
-  } catch (error: any) {
-    console.error('Error fetching farm animals:', error);
-    setError(error.response?.data?.message || 'Nie udało się pobrać listy zwierząt gospodarskich');
-    setAnimals([]);
-  } finally {
-    setIsLoading(false);
-  }
-}, [setSearchParams]);
+    return 'Brak danych';
+  };
 
-  // Efekt dla zmiany strony lub wyszukiwania
-  useEffect(() => {
-    const delay = setTimeout(() => {
-      fetchAnimals(currentPage, searchTerm);
-    }, 300); // Debounce do wyszukiwania
-    
-    return () => clearTimeout(delay);
-  }, [currentPage, searchTerm, fetchAnimals]);
+  // Pobieranie listy zwierząt gospodarskich - korzystamy z wyszukiwania serwerowego
+  const fetchAnimals = useCallback(async (page: number, search = '') => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Przygotowanie parametrów URL
+      const newSearchParams = new URLSearchParams();
+      newSearchParams.set('page', page.toString());
+      
+      const trimmedSearch = search.trim();
+      
+      // Dodajemy dodatkowe logowanie
+      console.log(`Wywołanie fetchAnimals: strona=${page}, fraza="${trimmedSearch}", długość=${trimmedSearch.length}`);
+      
+      // Wybór odpowiedniego zapytania w zależności od frazy wyszukiwania
+      let response;
+      
+      // Dodajemy parametr search do URL tylko jeśli ma odpowiednią długość
+      if (trimmedSearch.length >= MIN_SEARCH_LENGTH) {
+        newSearchParams.set('search', trimmedSearch);
+        // Wykonujemy zapytanie z parametrem wyszukiwania
+        response = await getAnimals(page, ITEMS_PER_PAGE, 'farm', { search: trimmedSearch });
+      } else {
+        // Jeśli fraza wyszukiwania jest pusta lub zbyt krótka, pobieramy wszystkie dane
+        console.log('Pobieranie wszystkich zwierząt - fraza zbyt krótka lub pusta');
+        response = await getAnimals(page, ITEMS_PER_PAGE, 'farm', {});
+      }
+      
+      // Aktualizujemy parametry URL
+      setSearchParams(newSearchParams);
+      
+      // Dane zwierząt są w response.data
+      const animalsList = response.data || [];
+      
+      // Informacje o paginacji są w response.pagination
+      const paginationInfo = response.pagination || {};
+      const totalCount = paginationInfo.totalCount || 0;
+      const calculatedTotalPages = paginationInfo.totalPages || Math.ceil(totalCount / ITEMS_PER_PAGE);
+      
+      console.log(`Pobrano ${animalsList.length} z ${totalCount} zwierząt (strona ${page}/${calculatedTotalPages})`);
+      
+      setAnimals(animalsList);
+      setTotalPages(calculatedTotalPages > 0 ? calculatedTotalPages : 1);
+      setTotalItems(totalCount);
+      
+    } catch (error: any) {
+      console.error('Error fetching farm animals:', error);
+      setError(error.response?.data?.message || 'Nie udało się pobrać listy zwierząt gospodarskich');
+      setAnimals([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setSearchParams]);
 
   // Obsługa zmiany strony
   const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
@@ -158,12 +191,51 @@ const fetchAnimals = useCallback(async (page: number, search = '') => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Obsługa wyszukiwania
+  // Obsługa wyszukiwania - ZMIENIONA, aby nie wywoływać fetchAnimals bezpośrednio
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
+    
+    // Czyścimy poprzedni timer debounce
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    
+    // Aktualizujemy pole wyszukiwania
     setSearchTerm(value);
-    setCurrentPage(1); // Wracamy do pierwszej strony przy nowym wyszukiwaniu
+    
+    // Resetujemy stronę przy nowym wyszukiwaniu
+    if (currentPage !== 1) {
+      setCurrentPage(1);
+      // useEffect zajmie się wywołaniem fetchAnimals po zmianie currentPage
+    }
+    // NIE wywołujemy fetchAnimals bezpośrednio - useEffect zajmie się tym
   };
+
+  // Efekt dla zmiany strony lub wyszukiwania - JEDYNE miejsce wywołujące fetchAnimals
+  useEffect(() => {
+    console.log(`useEffect uruchomiony: page=${currentPage}, searchTerm="${searchTerm}"`);
+    
+    // Czyścimy poprzedni timer debounce
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    
+    // Ustawiamy nowy timer debounce
+    debounceTimerRef.current = setTimeout(() => {
+      console.log(`Wykonuję fetchAnimals po debounce: page=${currentPage}, searchTerm="${searchTerm}"`);
+      fetchAnimals(currentPage, searchTerm);
+    }, SEARCH_DEBOUNCE_TIME);
+    
+    // Czyścimy timer przy odmontowaniu komponentu
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+    };
+  }, [currentPage, fetchAnimals, searchTerm]); // Zależności pozostają bez zmian
 
   // Nawigacja do szczegółów zwierzęcia
   const navigateToAnimalDetails = (id: number) => {
@@ -231,7 +303,7 @@ const fetchAnimals = useCallback(async (page: number, search = '') => {
           <div className="search-container">
             <TextField
               className="search-input"
-              placeholder="Szukaj zwierząt..."
+              placeholder={`Szukaj zwierząt (min. ${MIN_SEARCH_LENGTH} znaki)...`}
               variant="outlined"
               size="small"
               fullWidth
@@ -253,7 +325,9 @@ const fetchAnimals = useCallback(async (page: number, search = '') => {
           <div className="table-container">
             {animals.length === 0 ? (
               <div className="empty-message">
-                Nie znaleziono zwierząt gospodarskich
+                {searchTerm.trim().length >= MIN_SEARCH_LENGTH ? 
+                  `Nie znaleziono zwierząt gospodarskich dla "${searchTerm.trim()}"` : 
+                  'Nie znaleziono zwierząt gospodarskich'}
               </div>
             ) : (
               <>
@@ -263,12 +337,12 @@ const fetchAnimals = useCallback(async (page: number, search = '') => {
                   <Table className="data-table">
                     <TableHead>
                       <TableRow>
-                        <TableCell>Właściciel</TableCell>
-                        <TableCell>Nr kolczyka</TableCell>
-                        <TableCell>Gatunek</TableCell>
-                        <TableCell>Płeć</TableCell>
-                        <TableCell>Wiek</TableCell>
-                        <TableCell align="center">Akcje</TableCell>
+                        <TableCell sx={{ width: '30%' }}>Właściciel</TableCell>
+                        <TableCell sx={{ width: '20%' }}>Nr kolczyka</TableCell>
+                        <TableCell sx={{ width: '15%' }}>Gatunek</TableCell>
+                        <TableCell sx={{ width: '10%' }}>Płeć</TableCell>
+                        <TableCell sx={{ width: '15%' }}>Wiek</TableCell>
+                        <TableCell sx={{ width: '10%' }} align="center">Akcje</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -286,7 +360,15 @@ const fetchAnimals = useCallback(async (page: number, search = '') => {
                             hover
                             className="clickable-row"
                           >
-                            <TableCell>{animal.owner_name || ''}</TableCell>
+                            <TableCell 
+                              sx={{ 
+                                whiteSpace: 'pre-line', 
+                                verticalAlign: 'top',
+                                paddingY: 2
+                              }}
+                            >
+                              {formatOwnerInfo(animal)}
+                            </TableCell>
                             <TableCell>{identifierValue}</TableCell>
                             <TableCell>{animal.species || '-'}</TableCell>
                             <TableCell>{animal.sex === 'male' ? 'Samiec' : animal.sex === 'female' ? 'Samica' : '-'}</TableCell>

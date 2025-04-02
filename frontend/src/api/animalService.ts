@@ -3,6 +3,7 @@ import { Animal } from '../types/models';
 
 // Konfiguracja
 const ITEMS_PER_PAGE = 25; // Standardowa liczba elementów na stronę
+const MIN_SEARCH_LENGTH = 3; // Minimalna długość frazy wyszukiwania
 
 // Interfejs dla parametrów wyszukiwania
 interface AnimalSearchParams {
@@ -23,22 +24,6 @@ const CACHE_TTL = 60000; // 1 minuta w milisekundach
 // Funkcja do generowania klucza cache
 const generateCacheKey = (endpoint: string, params: any): string => {
   return `${endpoint}:${JSON.stringify(params)}`;
-};
-
-// Funkcja do mapowania typów zwierząt między frontendem a backendem
-const mapAnimalTypeToBackend = (type?: string): string | undefined => {
-  if (type === 'farm') return 'large';
-  if (type === 'companion') return 'small';
-  return type;
-};
-
-const mapAnimalTypeFromBackend = (animal: any): Animal => {
-  if (animal.animal_type === 'large') {
-    animal.animal_type = 'farm';
-  } else if (animal.animal_type === 'small') {
-    animal.animal_type = 'companion';
-  }
-  return animal;
 };
 
 // Funkcja pomocnicza do mierzenia czasu wykonania zapytania
@@ -73,22 +58,46 @@ export const getAnimals = async (
   searchParams?: Partial<AnimalSearchParams>
 ) => {
   // Przygotowanie parametrów zapytania
-  const params: AnimalSearchParams = {
+  const params: Record<string, any> = {
     page,
-    limit,
-    ...searchParams
+    limit
   };
 
   // Dodanie typu zwierzęcia jeśli określony
   if (animalType) {
-    params.animal_type = mapAnimalTypeToBackend(animalType);
+    params.animal_type = animalType;
   }
 
+  // Bezpieczne dodanie pozostałych parametrów z uwzględnieniem minimalnej długości wyszukiwania
+  if (searchParams) {
+    // Specjalna obsługa parametru search
+    if (searchParams.search !== undefined) {
+      const trimmedSearch = String(searchParams.search).trim();
+      if (trimmedSearch.length >= MIN_SEARCH_LENGTH) {
+        params.search = trimmedSearch;
+        console.log(`Performing server-side search for term: "${trimmedSearch}" (length: ${trimmedSearch.length})`);
+      } else {
+        console.log(`Search term too short: "${trimmedSearch}" (length: ${trimmedSearch.length}), not using search parameter`);
+        // Celowo nie dodajemy parametru search dla zbyt krótkich fraz
+      }
+    }
+
+    // Dodanie pozostałych parametrów - bezpieczne pod względem typów
+    Object.entries(searchParams).forEach(([key, value]) => {
+      if (key !== 'search' && value !== undefined && value !== null && value !== '') {
+        params[key] = value;
+      }
+    });
+  }
+
+  // Diagnostyczne logowanie
+  console.log(`API params debug - page: ${params.page}, limit: ${params.limit}, animal_type: ${params.animal_type}, search: ${params.search || 'not set'}`);
+  
   // Generowanie klucza cache
   const cacheKey = generateCacheKey('/animals', params);
   
-  // Sprawdzenie cache
-  const cachedResponse = responseCache.get(cacheKey);
+  // Sprawdzenie cache - pomijamy cache dla wyszukiwań, aby zawsze mieć aktualne wyniki
+  const cachedResponse = params.search ? null : responseCache.get(cacheKey);
   if (cachedResponse && (Date.now() - cachedResponse.timestamp < CACHE_TTL)) {
     console.log(`Using cached response for ${cacheKey}`);
     return cachedResponse.data;
@@ -102,28 +111,46 @@ export const getAnimals = async (
     '/animals'
   );
 
-  // Mapowanie typów w odpowiedzi
-  if (response.data && response.data.data) {
-    response.data.data = response.data.data.map(mapAnimalTypeFromBackend);
+  // Diagnostyczne logowanie odpowiedzi
+  if (response && response.data) {
+    console.log(`API response received: contains ${response.data.data ? response.data.data.length : 0} items`);
   }
 
-  // Zapisanie odpowiedzi w cache
-  responseCache.set(cacheKey, {
-    data: response.data,
-    timestamp: Date.now()
-  });
+  // Zapisanie odpowiedzi w cache (jeśli to nie jest wyszukiwanie)
+  if (!params.search) {
+    responseCache.set(cacheKey, {
+      data: response.data,
+      timestamp: Date.now()
+    });
+  }
   
   return response.data;
 };
 
 /**
- * Funkcja do pobierania pojedynczego zwierzęcia
- * @param id Identyfikator zwierzęcia
+ * Funkcja do wyszukiwania zwierząt - helper dla lepszej czytelności kodu
+ * @param searchTerm Fraza wyszukiwania
+ * @param animalType Typ zwierzęcia (farm/companion)
+ * @param page Numer strony
+ * @param limit Liczba elementów na stronę
  */
+export const searchAnimals = async (
+  searchTerm: string,
+  animalType?: string,
+  page = 1,
+  limit = ITEMS_PER_PAGE,
+  additionalParams?: Partial<AnimalSearchParams>
+) => {
+  return getAnimals(page, limit, animalType, {
+    search: searchTerm,
+    ...additionalParams
+  });
+};
+
+// Pozostałe funkcje pozostają bez zmian
 export const getAnimal = async (id: number): Promise<Animal> => {
   const endpoint = `/animals/${id}`;
   
-  // Sprawdzenie cache
   const cacheKey = generateCacheKey(endpoint, {});
   const cachedResponse = responseCache.get(cacheKey);
   if (cachedResponse && (Date.now() - cachedResponse.timestamp < CACHE_TTL)) {
@@ -133,18 +160,11 @@ export const getAnimal = async (id: number): Promise<Animal> => {
 
   console.log(`API request: GET ${endpoint}`);
   
-  // Wykonanie zapytania z mierzeniem czasu
   const response = await measureResponseTime(
     axiosInstance.get(endpoint),
     endpoint
   );
   
-  // Mapowanie typu w odpowiedzi
-  if (response.data && response.data.data) {
-    response.data.data = mapAnimalTypeFromBackend(response.data.data);
-  }
-
-  // Zapisanie odpowiedzi w cache
   responseCache.set(cacheKey, {
     data: response.data,
     timestamp: Date.now()
@@ -153,99 +173,67 @@ export const getAnimal = async (id: number): Promise<Animal> => {
   return response.data.data;
 };
 
-/**
- * Funkcja do tworzenia nowego zwierzęcia
- * @param animalData Dane zwierzęcia
- */
 export const createAnimal = async (animalData: Partial<Animal>): Promise<Animal> => {
-  // Kopiujemy dane, aby nie modyfikować oryginalnego obiektu
-  const mappedData = { ...animalData };
+  const dataToSend = { ...animalData };
   
-  // Mapowanie typu przed wysłaniem
-  if (mappedData.animal_type) {
-    mappedData.animal_type = mapAnimalTypeToBackend(mappedData.animal_type) as 'farm' | 'companion';
+  if (dataToSend.animal_type === 'farm' && 
+      dataToSend.farm_animal?.identifier && 
+      !dataToSend.animal_number) {
+    dataToSend.animal_number = dataToSend.farm_animal.identifier;
   }
   
-  console.log('API request: POST /animals with data:', mappedData);
+  console.log('API request: POST /animals with data:', dataToSend);
   
-  // Wykonanie zapytania z mierzeniem czasu
   const response = await measureResponseTime(
-    axiosInstance.post('/animals', mappedData),
+    axiosInstance.post('/animals', dataToSend),
     '/animals (POST)'
   );
   
-  // Mapowanie typu w odpowiedzi
-  if (response.data && response.data.data) {
-    response.data.data = mapAnimalTypeFromBackend(response.data.data);
-    
-    // Czyszczenie cache po dodaniu nowego zwierzęcia
-    Array.from(responseCache.keys())
-      .filter(key => key.startsWith('/animals:'))
-      .forEach(key => responseCache.delete(key));
-  }
+  Array.from(responseCache.keys())
+    .filter(key => key.startsWith('/animals:'))
+    .forEach(key => responseCache.delete(key));
   
   return response.data.data;
 };
 
-/**
- * Funkcja do aktualizacji zwierzęcia
- * @param id Identyfikator zwierzęcia
- * @param animalData Dane zwierzęcia do aktualizacji
- */
 export const updateAnimal = async (id: number, animalData: Partial<Animal>): Promise<Animal> => {
-  // Kopiujemy dane, aby nie modyfikować oryginalnego obiektu
-  const mappedData = { ...animalData };
+  const dataToSend = { ...animalData };
   
-  // Mapowanie typu przed wysłaniem
-  if (mappedData.animal_type) {
-    mappedData.animal_type = mapAnimalTypeToBackend(mappedData.animal_type) as 'farm' | 'companion';
+  if (dataToSend.animal_type === 'farm' && 
+      dataToSend.farm_animal?.identifier && 
+      !dataToSend.animal_number) {
+    dataToSend.animal_number = dataToSend.farm_animal.identifier;
   }
   
   const endpoint = `/animals/${id}`;
-  console.log(`API request: PUT ${endpoint} with data:`, mappedData);
+  console.log(`API request: PUT ${endpoint} with data:`, dataToSend);
   
-  // Wykonanie zapytania z mierzeniem czasu
   const response = await measureResponseTime(
-    axiosInstance.put(endpoint, mappedData),
+    axiosInstance.put(endpoint, dataToSend),
     endpoint + ' (PUT)'
   );
   
-  // Mapowanie typu w odpowiedzi
-  if (response.data && response.data.data) {
-    response.data.data = mapAnimalTypeFromBackend(response.data.data);
-    
-    // Czyszczenie cache po aktualizacji
-    Array.from(responseCache.keys())
-      .filter(key => key.startsWith('/animals:') || key === generateCacheKey(endpoint, {}))
-      .forEach(key => responseCache.delete(key));
-  }
+  Array.from(responseCache.keys())
+    .filter(key => key.startsWith('/animals:') || key === generateCacheKey(endpoint, {}))
+    .forEach(key => responseCache.delete(key));
   
   return response.data.data;
 };
 
-/**
- * Funkcja do usuwania zwierzęcia
- * @param id Identyfikator zwierzęcia do usunięcia
- */
 export const deleteAnimal = async (id: number): Promise<void> => {
   const endpoint = `/animals/${id}`;
   console.log(`API request: DELETE ${endpoint}`);
   
-  // Wykonanie zapytania z mierzeniem czasu
   await measureResponseTime(
     axiosInstance.delete(endpoint),
     endpoint + ' (DELETE)'
   );
   
-  // Czyszczenie cache po usunięciu
   Array.from(responseCache.keys())
     .filter(key => key.startsWith('/animals:') || key === generateCacheKey(endpoint, {}))
     .forEach(key => responseCache.delete(key));
 };
 
-/**
- * Funkcja do czyszczenia cache - można wywołać np. po wylogowaniu
- */
 export const clearAnimalsCache = (): void => {
   Array.from(responseCache.keys())
     .filter(key => key.startsWith('/animals:'))

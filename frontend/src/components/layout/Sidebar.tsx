@@ -91,8 +91,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onLinkClick }) => {
       submenuKey: 'animals',
       submenu: true,
       items: [
-        { title: 'Zwierzęta gospodarskie', path: '/animals/farm', addNew: '/animals/farm/new' },
-        { title: 'Zwierzęta domowe', path: '/animals/pets', addNew: '/animals/pets/new' },
+        { title: 'Gospodarskie', path: '/animals/farm', addNew: '/animals/farm/new' },
+        { title: 'Domowe', path: '/animals/pets', addNew: '/animals/pets/new' },
         { title: 'Ustawienia', path: '/animals/settings' },
       ],
     },
@@ -108,7 +108,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onLinkClick }) => {
       ],
     },
     {
-      title: 'Dokumentacja Medyczna',
+      title: 'Dokumentacja',
       icon: <FaBook />,
       submenuKey: 'medical',
       submenu: true,
@@ -155,7 +155,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onLinkClick }) => {
 
   return (
     <div ref={sidebarRef} className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
-      <div className="sidebar-header">{isOpen && <h2 className="app-logo">AmicusApp</h2>}</div>
+      <div className="sidebar-header">
+        <img src="/assets/images/logo.svg" alt="Logo" className="sidebar-logo" />
+        {isOpen && <span className="sidebar-title">vetcloud.pl</span>}
+      </div>
       <nav className="sidebar-nav">
         <ul>
           {menuItems.map((item, index) => (

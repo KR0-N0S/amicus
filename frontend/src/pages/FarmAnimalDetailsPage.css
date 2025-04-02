@@ -1,0 +1,168 @@
+.farm-animal-details {
+    width: 100%;
+    margin-bottom: 2rem;
+  }
+  
+  /* Nagłówek karty zwierzęcia */
+  .animal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 1rem;
+  }
+  
+  .animal-header-info {
+    flex-grow: 1;
+  }
+  
+  .animal-name {
+    font-size: 1.8rem;
+    margin: 0 0 0.5rem 0;
+    color: #2c3e50;
+  }
+  
+  .animal-breed {
+    font-size: 1.2rem;
+    font-weight: 500;
+    margin: 0 0 0.5rem 0;
+    color: #546e7a;
+  }
+  
+  .animal-owner, .animal-age {
+    margin: 0.3rem 0;
+    color: #546e7a;
+    font-size: 1rem;
+  }
+  
+  .animal-header-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  
+  /* Zakładki z informacjami */
+  .animal-basic-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  .info-section {
+    background-color: #f9f9f9;
+    padding: 1rem;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  
+  .info-section h3 {
+    margin-top: 0;
+    font-size: 1.1rem;
+    color: #2c3e50;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 0.5rem;
+  }
+  
+  .info-row {
+    display: flex;
+    margin-bottom: 0.5rem;
+    align-items: center;
+  }
+  
+  .info-row .label {
+    width: 180px;
+    font-weight: 600;
+    color: #616161;
+    flex-shrink: 0;
+  }
+  
+  .info-row .value {
+    flex-grow: 1;
+    color: #212121;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    max-width: 70%;
+  }
+  
+  .notes-container {
+    background-color: #fff;
+    border: 1px solid #e0e0e0;
+    padding: 1rem;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    min-height: 100px;
+  }
+  
+  .empty-tab {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 150px;
+    background-color: #f9f9f9;
+    border-radius: 6px;
+    color: #757575;
+    font-style: italic;
+  }
+  
+  .error-actions {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: center;
+  }
+  
+  /* Styl dla drukowania */
+  @media print {
+    .animal-header-actions,
+    .card-actions,
+    .tabs-headers {
+      display: none !important;
+    }
+    
+    .farm-animal-details {
+      width: 100% !important;
+    }
+    
+    .page-container {
+      padding: 0 !important;
+      margin: 0 !important;
+    }
+    
+    .card {
+      box-shadow: none !important;
+      border: none !important;
+    }
+    
+    .info-section {
+      box-shadow: none !important;
+      page-break-inside: avoid;
+    }
+  }
+  
+  /* Responsywność */
+  @media (max-width: 768px) {
+    .animal-header {
+      flex-direction: column;
+    }
+    
+    .animal-header-actions {
+      margin-top: 1rem;
+      justify-content: flex-start;
+    }
+    
+    .info-row {
+      flex-direction: column;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+    }
+    
+    .info-row .label {
+      width: 100%;
+      margin-bottom: 0.2rem;
+    }
+    
+    .info-row .value {
+      max-width: 100%;
+    }
+  }
