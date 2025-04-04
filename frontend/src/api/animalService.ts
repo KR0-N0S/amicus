@@ -20,6 +20,16 @@ interface AnimalSearchParams {
 // Cache dla ostatnich wyników (proste rozwiązanie, które można rozbudować)
 const responseCache = new Map<string, {data: any, timestamp: number}>();
 const CACHE_TTL = 60000; // 1 minuta w milisekundach
+const EMPTY_RESPONSE_TTL = 5000; // 5 sekund dla pustych odpowiedzi
+
+// Funkcja sprawdzająca czy odpowiedź jest pusta lub niepełna
+const isEmptyOrIncompleteResponse = (data: any): boolean => {
+  if (!data) return true;
+  if (typeof data === 'object' && Object.keys(data).length === 0) return true;
+  // Dla API zwracającego dane w formacie {data: ...}
+  if (data.data && typeof data.data === 'object' && Object.keys(data.data).length === 0) return true;
+  return false;
+};
 
 // Funkcja do generowania klucza cache
 const generateCacheKey = (endpoint: string, params: any): string => {
@@ -91,7 +101,7 @@ export const getAnimals = async (
   }
 
   // Diagnostyczne logowanie
-  console.log(`API params debug - page: ${params.page}, limit: ${params.limit}, animal_type: ${params.animal_type}, search: ${params.search || 'not set'}`);
+  console.log(`API params debug - page: ${params.page}, limit: ${params.limit}, animal_type: ${params.animal_type || 'not set'}, search: ${params.search || 'not set'}`);
   
   // Generowanie klucza cache
   const cacheKey = generateCacheKey('/animals', params);
@@ -147,30 +157,59 @@ export const searchAnimals = async (
   });
 };
 
-// Pozostałe funkcje pozostają bez zmian
+// Modyfikacja funkcji getAnimal z dodaną obsługą pustych odpowiedzi
 export const getAnimal = async (id: number): Promise<Animal> => {
   const endpoint = `/animals/${id}`;
   
   const cacheKey = generateCacheKey(endpoint, {});
   const cachedResponse = responseCache.get(cacheKey);
-  if (cachedResponse && (Date.now() - cachedResponse.timestamp < CACHE_TTL)) {
+
+  // Sprawdzamy czy cache istnieje, nie jest przeterminowany i nie jest pusty
+  if (cachedResponse && 
+      (Date.now() - cachedResponse.timestamp < CACHE_TTL) && 
+      !isEmptyOrIncompleteResponse(cachedResponse.data)) {
     console.log(`Using cached response for ${cacheKey}`);
     return cachedResponse.data.data;
+  } else if (cachedResponse && isEmptyOrIncompleteResponse(cachedResponse.data)) {
+    // Jeśli mamy pustą odpowiedź w cache, używamy jej tylko jeśli nie jest starsza niż EMPTY_RESPONSE_TTL
+    if (Date.now() - cachedResponse.timestamp < EMPTY_RESPONSE_TTL) {
+      console.log(`Using cached empty response for ${cacheKey} (short TTL)`);
+      return cachedResponse.data.data;
+    } else {
+      console.log(`Cached empty response for ${cacheKey} expired, fetching new data`);
+      // Cache wygasł, usuwamy go
+      responseCache.delete(cacheKey);
+    }
   }
 
   console.log(`API request: GET ${endpoint}`);
   
-  const response = await measureResponseTime(
-    axiosInstance.get(endpoint),
-    endpoint
-  );
-  
-  responseCache.set(cacheKey, {
-    data: response.data,
-    timestamp: Date.now()
-  });
-  
-  return response.data.data;
+  try {
+    const response = await measureResponseTime(
+      axiosInstance.get(endpoint),
+      endpoint
+    );
+    
+    // Sprawdzamy czy odpowiedź jest pusta i ustawiamy odpowiedni TTL
+    if (isEmptyOrIncompleteResponse(response.data)) {
+      console.warn(`Received empty or incomplete response for ${endpoint}, using short cache TTL`);
+      responseCache.set(cacheKey, {
+        data: response.data,
+        timestamp: Date.now() // Ten cache wygaśnie po EMPTY_RESPONSE_TTL
+      });
+    } else {
+      responseCache.set(cacheKey, {
+        data: response.data,
+        timestamp: Date.now()
+      });
+    }
+    
+    return response.data.data;
+  } catch (error) {
+    // W przypadku błędu usuwamy potencjalnie problematyczny cache
+    responseCache.delete(cacheKey);
+    throw error;
+  }
 };
 
 export const createAnimal = async (animalData: Partial<Animal>): Promise<Animal> => {
@@ -189,9 +228,8 @@ export const createAnimal = async (animalData: Partial<Animal>): Promise<Animal>
     '/animals (POST)'
   );
   
-  Array.from(responseCache.keys())
-    .filter(key => key.startsWith('/animals:'))
-    .forEach(key => responseCache.delete(key));
+  // Po utworzeniu czyścimy cache dla listy zwierząt
+  clearAnimalsCache();
   
   return response.data.data;
 };
@@ -213,9 +251,10 @@ export const updateAnimal = async (id: number, animalData: Partial<Animal>): Pro
     endpoint + ' (PUT)'
   );
   
-  Array.from(responseCache.keys())
-    .filter(key => key.startsWith('/animals:') || key === generateCacheKey(endpoint, {}))
-    .forEach(key => responseCache.delete(key));
+  // Po aktualizacji czyścimy cache dla danego zwierzęcia i listy zwierząt
+  const animalCacheKey = generateCacheKey(endpoint, {});
+  responseCache.delete(animalCacheKey);
+  clearAnimalsCache();
   
   return response.data.data;
 };
@@ -229,9 +268,10 @@ export const deleteAnimal = async (id: number): Promise<void> => {
     endpoint + ' (DELETE)'
   );
   
-  Array.from(responseCache.keys())
-    .filter(key => key.startsWith('/animals:') || key === generateCacheKey(endpoint, {}))
-    .forEach(key => responseCache.delete(key));
+  // Po usunięciu czyścimy cache dla danego zwierzęcia i listy zwierząt
+  const animalCacheKey = generateCacheKey(endpoint, {});
+  responseCache.delete(animalCacheKey);
+  clearAnimalsCache();
 };
 
 export const clearAnimalsCache = (): void => {
@@ -241,3 +281,6 @@ export const clearAnimalsCache = (): void => {
   
   console.log('Animals cache cleared');
 };
+
+// Eksport funkcji sprawdzającej puste odpowiedzi dla testów
+export const _isEmptyOrIncompleteResponse = isEmptyOrIncompleteResponse;

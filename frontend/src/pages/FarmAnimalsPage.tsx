@@ -21,6 +21,7 @@ import Card from '../components/common/Card';
 import Button from '../components/common/Button';
 import { getAnimals } from '../api/animalService';
 import { Animal } from '../types/models';
+import useDebounce from '../hooks/useDebounce';
 
 import './DataList.css';
 
@@ -36,76 +37,80 @@ interface ExtendedAnimal extends Animal {
 }
 
 const ITEMS_PER_PAGE = 25; // Liczba zwierząt na stronę
-const SEARCH_DEBOUNCE_TIME = 300; // Czas debounce w ms
+const SEARCH_DEBOUNCE_TIME = 500; // 500ms debounce
 const MIN_SEARCH_LENGTH = 3; // Minimalna długość frazy wyszukiwania
 
 const FarmAnimalsPage: React.FC = () => {
+  // Unikalny identyfikator instancji komponentu do diagnostyki
+  const componentId = useRef(`farm-animals-${Math.random().toString(36).substring(2, 9)}`);
+  
+  // Licznik renderów komponentu
+  const renderCount = useRef(0);
+  
+  // Diagnostyka - log przy każdym renderowaniu
+  console.log(`[${new Date().toISOString()}] Renderowanie komponentu ${componentId.current}, render #${++renderCount.current}`);
+  
   const [searchParams, setSearchParams] = useSearchParams();
   const initialPage = parseInt(searchParams.get('page') || '1');
   const initialSearch = searchParams.get('search') || '';
   
+  // Referencje do śledzenia ostatnich wartości dla diagnostyki
+  const lastPageRef = useRef<number>(initialPage);
+  const lastSearchRef = useRef<string>(initialSearch);
+  
+  // Scalamy currentPage i searchTerm w jeden obiekt
+  const [searchConfig, setSearchConfig] = useState({ page: initialPage, search: initialSearch });
+  
   const [animals, setAnimals] = useState<ExtendedAnimal[]>([]);
-  const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(initialPage);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const navigate = useNavigate();
   
-  // Używamy useRef do przechowywania timera debounce
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Używamy hooka useDebounce dla frazy wyszukiwania
+  const debouncedSearch = useDebounce(searchConfig.search, SEARCH_DEBOUNCE_TIME);
+  
+  // Referencja do śledzenia zmian debouncedSearch
+  const lastDebouncedSearchRef = useRef<string>(debouncedSearch);
+  
+  // Diagnostyka - log przy zmianie debouncedSearch
+  if (lastDebouncedSearchRef.current !== debouncedSearch) {
+    console.log(`[${new Date().toISOString()}] Zmiana debouncedSearch: "${lastDebouncedSearchRef.current}" -> "${debouncedSearch}"`);
+    lastDebouncedSearchRef.current = debouncedSearch;
+  }
 
   // Funkcja do formatowania wieku
   const formatAge = (birthDate: string | null | undefined): string => {
     if (!birthDate) return '-';
-    
     const birthDateObj = new Date(birthDate);
     const today = new Date();
-    
-    // Sprawdzamy, czy data jest poprawna
     if (isNaN(birthDateObj.getTime())) return '-';
-    
-    // Obliczanie różnicy w milisekundach
     const diffMs = today.getTime() - birthDateObj.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    
-    // Wyświetlanie odpowiedniego formatu
     if (diffDays <= 30) {
       return `${diffDays} ${getDeclination(diffDays, 'dzień', 'dni', 'dni')}`;
     }
-    
-    // Obliczanie miesięcy
-    const diffMonths = Math.floor(diffDays / 30.44); // średnio dni w miesiącu
-    
+    const diffMonths = Math.floor(diffDays / 30.44);
     if (diffMonths <= 23) {
       return `${diffMonths} ${getDeclination(diffMonths, 'miesiąc', 'miesiące', 'miesięcy')}`;
     }
-    
-    // Obliczanie lat
-    const diffYears = Math.floor(diffDays / 365.25); // uwzględnienie lat przestępnych
+    const diffYears = Math.floor(diffDays / 365.25);
     return `${diffYears} ${getDeclination(diffYears, 'rok', 'lata', 'lat')}`;
   };
   
-  // Odmiana polskich wyrazów w zależności od liczby
   const getDeclination = (number: number, singular: string, plural2to4: string, plural5plus: string): string => {
     if (number === 1) return singular;
-    
     if (number % 10 >= 2 && number % 10 <= 4 && (number % 100 < 10 || number % 100 >= 20)) {
       return plural2to4;
     }
-    
     return plural5plus;
   };
 
-  // Funkcja formatująca dane właściciela
   const formatOwnerInfo = (animal: ExtendedAnimal): string => {
-    // Imię i nazwisko właściciela
     const ownerName = animal.owner_name || 
       (animal.owner_first_name && animal.owner_last_name ? 
         `${animal.owner_first_name} ${animal.owner_last_name}` : null);
-    
-    // Adres właściciela
     let address = '';
     if (animal.owner_city) {
       address = animal.owner_city;
@@ -116,133 +121,141 @@ const FarmAnimalsPage: React.FC = () => {
         }
       }
     }
-    
     if (ownerName) {
       return `${ownerName}${address ? `\n${address}` : ''}`;
     }
-    
-    // Jeśli nie mamy danych właściciela, ale mamy owner_id
     if (animal.owner_id) {
       return `ID: ${animal.owner_id}`;
     }
-    
     return 'Brak danych';
   };
 
-  // Pobieranie listy zwierząt gospodarskich - korzystamy z wyszukiwania serwerowego
+  // Licznik wywołań fetchAnimals dla diagnostyki
+  const fetchCounter = useRef(0);
+  
+  // Funkcja aktualizująca URL - wydzielona z fetchAnimals
+  const updateSearchParams = useCallback((page: number, search: string) => {
+    const newSearchParams = new URLSearchParams();
+    newSearchParams.set('page', page.toString());
+    
+    const trimmedSearch = search.trim();
+    if (trimmedSearch.length >= MIN_SEARCH_LENGTH) {
+      newSearchParams.set('search', trimmedSearch);
+    }
+    
+    setSearchParams(newSearchParams);
+  }, [setSearchParams]);
+  
+  // Funkcja pobierająca dane zwierząt - już nie aktualizuje parametrów URL
   const fetchAnimals = useCallback(async (page: number, search = '') => {
+    // Generuj unikalny identyfikator dla każdego wywołania
+    const callId = ++fetchCounter.current;
+    const timestamp = new Date().toISOString();
+    
+    // Diagnostyka - początek wywołania
+    console.log(`[${timestamp}] fetchAnimals #${callId} (${componentId.current}): ROZPOCZĘCIE, strona=${page}, fraza="${search}"`);
+    
     try {
       setIsLoading(true);
       setError(null);
       
-      // Przygotowanie parametrów URL
-      const newSearchParams = new URLSearchParams();
-      newSearchParams.set('page', page.toString());
-      
       const trimmedSearch = search.trim();
       
-      // Dodajemy dodatkowe logowanie
-      console.log(`Wywołanie fetchAnimals: strona=${page}, fraza="${trimmedSearch}", długość=${trimmedSearch.length}`);
+      // Diagnostyka - szczegóły zapytania
+      console.log(`[${timestamp}] fetchAnimals #${callId}: Wywołanie dla strony=${page}, fraza="${trimmedSearch}", długość=${trimmedSearch.length}`);
       
-      // Wybór odpowiedniego zapytania w zależności od frazy wyszukiwania
       let response;
-      
-      // Dodajemy parametr search do URL tylko jeśli ma odpowiednią długość
       if (trimmedSearch.length >= MIN_SEARCH_LENGTH) {
-        newSearchParams.set('search', trimmedSearch);
-        // Wykonujemy zapytanie z parametrem wyszukiwania
+        console.log(`[${timestamp}] fetchAnimals #${callId}: Wywołanie getAnimals z search=${trimmedSearch}`);
         response = await getAnimals(page, ITEMS_PER_PAGE, 'farm', { search: trimmedSearch });
       } else {
-        // Jeśli fraza wyszukiwania jest pusta lub zbyt krótka, pobieramy wszystkie dane
-        console.log('Pobieranie wszystkich zwierząt - fraza zbyt krótka lub pusta');
+        console.log(`[${timestamp}] fetchAnimals #${callId}: Pobieranie wszystkich zwierząt - fraza zbyt krótka lub pusta`);
         response = await getAnimals(page, ITEMS_PER_PAGE, 'farm', {});
       }
       
-      // Aktualizujemy parametry URL
-      setSearchParams(newSearchParams);
+      // Diagnostyka - odpowiedź z API
+      console.log(`[${timestamp}] fetchAnimals #${callId}: Otrzymano odpowiedź z API`);
       
-      // Dane zwierząt są w response.data
       const animalsList = response.data || [];
-      
-      // Informacje o paginacji są w response.pagination
       const paginationInfo = response.pagination || {};
       const totalCount = paginationInfo.totalCount || 0;
       const calculatedTotalPages = paginationInfo.totalPages || Math.ceil(totalCount / ITEMS_PER_PAGE);
       
-      console.log(`Pobrano ${animalsList.length} z ${totalCount} zwierząt (strona ${page}/${calculatedTotalPages})`);
+      // Diagnostyka - podsumowanie odpowiedzi
+      console.log(`[${timestamp}] fetchAnimals #${callId}: Pobrano ${animalsList.length} z ${totalCount} zwierząt (strona ${page}/${calculatedTotalPages})`);
       
       setAnimals(animalsList);
       setTotalPages(calculatedTotalPages > 0 ? calculatedTotalPages : 1);
       setTotalItems(totalCount);
       
     } catch (error: any) {
-      console.error('Error fetching farm animals:', error);
+      console.error(`[${timestamp}] fetchAnimals #${callId}: Błąd:`, error);
       setError(error.response?.data?.message || 'Nie udało się pobrać listy zwierząt gospodarskich');
       setAnimals([]);
     } finally {
       setIsLoading(false);
+      // Diagnostyka - zakończenie
+      console.log(`[${timestamp}] fetchAnimals #${callId}: ZAKOŃCZONO`);
     }
-  }, [setSearchParams]);
+  }, []); // Brak zależności - funkcja jest stabilna
 
-  // Obsługa zmiany strony
+  // Obsługa zmiany strony – aktualizujemy tylko page w obiekcie searchConfig
   const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
-    setCurrentPage(value);
-    // Przewijamy na górę strony przy zmianie strony
+    console.log(`[${new Date().toISOString()}] handlePageChange: ${searchConfig.page} -> ${value}`);
+    setSearchConfig(prev => ({ ...prev, page: value }));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Obsługa wyszukiwania - ZMIENIONA, aby nie wywoływać fetchAnimals bezpośrednio
+  // Obsługa wyszukiwania – aktualizujemy search (oraz resetujemy page do 1)
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    
-    // Czyścimy poprzedni timer debounce
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
-    }
-    
-    // Aktualizujemy pole wyszukiwania
-    setSearchTerm(value);
-    
-    // Resetujemy stronę przy nowym wyszukiwaniu
-    if (currentPage !== 1) {
-      setCurrentPage(1);
-      // useEffect zajmie się wywołaniem fetchAnimals po zmianie currentPage
-    }
-    // NIE wywołujemy fetchAnimals bezpośrednio - useEffect zajmie się tym
+    console.log(`[${new Date().toISOString()}] handleSearch: "${searchConfig.search}" -> "${value}"`);
+    setSearchConfig(prev => ({ ...prev, search: value, page: 1 }));
   };
 
-  // Efekt dla zmiany strony lub wyszukiwania - JEDYNE miejsce wywołujące fetchAnimals
+  // Licznik wywołań useEffect
+  const effectCounter = useRef(0);
+  
+  // useEffect wywołujący fetchAnimals, gdy zmieni się page lub debouncedSearch
   useEffect(() => {
-    console.log(`useEffect uruchomiony: page=${currentPage}, searchTerm="${searchTerm}"`);
+    // Unikalne ID dla każdego uruchomienia efektu
+    const effectId = ++effectCounter.current;
+    const timestamp = new Date().toISOString();
     
-    // Czyścimy poprzedni timer debounce
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
-    }
+    console.log(`[${timestamp}] useEffect #${effectId} (${componentId.current}): URUCHOMIONY, page=${searchConfig.page}, debouncedSearch="${debouncedSearch}"`);
     
-    // Ustawiamy nowy timer debounce
-    debounceTimerRef.current = setTimeout(() => {
-      console.log(`Wykonuję fetchAnimals po debounce: page=${currentPage}, searchTerm="${searchTerm}"`);
-      fetchAnimals(currentPage, searchTerm);
-    }, SEARCH_DEBOUNCE_TIME);
+    // Sprawdzenie czy faktycznie wartości się zmieniły
+    const pageChanged = lastPageRef.current !== searchConfig.page;
+    const searchChanged = lastSearchRef.current !== debouncedSearch;
     
-    // Czyścimy timer przy odmontowaniu komponentu
+    console.log(`[${timestamp}] useEffect #${effectId}: Zmiany - page: ${pageChanged ? 'TAK' : 'NIE'}, search: ${searchChanged ? 'TAK' : 'NIE'}`);
+    
+    // Aktualizacja referencji ostatnich wartości
+    lastPageRef.current = searchConfig.page;
+    lastSearchRef.current = debouncedSearch;
+    
+    // Wywołanie fetchAnimals
+    console.log(`[${timestamp}] useEffect #${effectId}: Wywołanie fetchAnimals(${searchConfig.page}, "${debouncedSearch}")`);
+    fetchAnimals(searchConfig.page, debouncedSearch);
+    
+    // Aktualizujemy parametry URL w osobnym useEffect
+    
+    // Funkcja czyszcząca
     return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-        debounceTimerRef.current = null;
-      }
+      console.log(`[${timestamp}] useEffect #${effectId}: CLEANUP`);
     };
-  }, [currentPage, fetchAnimals, searchTerm]); // Zależności pozostają bez zmian
+  }, [searchConfig.page, debouncedSearch, fetchAnimals]);
 
-  // Nawigacja do szczegółów zwierzęcia
+  // Osobny useEffect do aktualizacji parametrów URL
+  useEffect(() => {
+    // Mamy już dane, więc możemy zaktualizować URL
+    updateSearchParams(searchConfig.page, debouncedSearch);
+  }, [searchConfig.page, debouncedSearch, updateSearchParams]);
+
   const navigateToAnimalDetails = (id: number) => {
     navigate(`/animals/farm/${id}`);
   };
 
-  // Akcje dla karty
   const cardActions = (
     <Button
       variant="primary"
@@ -253,38 +266,30 @@ const FarmAnimalsPage: React.FC = () => {
     </Button>
   );
 
-  // Komponenty paginacji
   const renderPagination = () => {
     if (totalPages <= 1) return null;
-    
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', mt: 2, mb: 2 }}>
         <Pagination
           count={totalPages}
-          page={currentPage}
+          page={searchConfig.page}
           onChange={handlePageChange}
           color="primary"
           size="large"
           showFirstButton
           showLastButton
           renderItem={(item) => (
-            <PaginationItem
-              components={{ previous: FaArrowLeft, next: FaArrowRight }}
-              {...item}
-            />
+            <PaginationItem components={{ previous: FaArrowLeft, next: FaArrowRight }} {...item} />
           )}
         />
       </Box>
     );
   };
 
-  // Informacja o liczbie wyświetlanych elementów
   const renderPaginationInfo = () => {
     if (totalItems === 0) return null;
-    
-    const startItem = (currentPage - 1) * ITEMS_PER_PAGE + 1;
-    const endItem = Math.min(currentPage * ITEMS_PER_PAGE, totalItems);
-    
+    const startItem = (searchConfig.page - 1) * ITEMS_PER_PAGE + 1;
+    const endItem = Math.min(searchConfig.page * ITEMS_PER_PAGE, totalItems);
     return (
       <Typography variant="body2" color="textSecondary" align="center" sx={{ mt: 1, mb: 1 }}>
         Wyświetlanie {startItem}-{endItem} z {totalItems} zwierząt
@@ -292,13 +297,17 @@ const FarmAnimalsPage: React.FC = () => {
     );
   };
 
+  // Log przy każdym renderowaniu
+  React.useEffect(() => {
+    console.log(`[${new Date().toISOString()}] Komponent ${componentId.current} zamontowany`);
+    return () => {
+      console.log(`[${new Date().toISOString()}] Komponent ${componentId.current} odmontowany`);
+    };
+  }, []);
+
   return (
     <div className="clients-list">
-      <h1 className="page-title">Zwierzęta gospodarskie</h1>
-      <Card 
-        title="Lista zwierząt gospodarskich"
-        actions={cardActions}
-      >
+      <Card title="Lista zwierząt gospodarskich" actions={cardActions}>
         <div className="card-actions">
           <div className="search-container">
             <TextField
@@ -307,7 +316,7 @@ const FarmAnimalsPage: React.FC = () => {
               variant="outlined"
               size="small"
               fullWidth
-              value={searchTerm}
+              value={searchConfig.search}
               onChange={handleSearch}
             />
             <FaSearch className="search-icon" />
@@ -325,8 +334,8 @@ const FarmAnimalsPage: React.FC = () => {
           <div className="table-container">
             {animals.length === 0 ? (
               <div className="empty-message">
-                {searchTerm.trim().length >= MIN_SEARCH_LENGTH ? 
-                  `Nie znaleziono zwierząt gospodarskich dla "${searchTerm.trim()}"` : 
+                {searchConfig.search.trim().length >= MIN_SEARCH_LENGTH ? 
+                  `Nie znaleziono zwierząt gospodarskich dla "${searchConfig.search.trim()}"` : 
                   'Nie znaleziono zwierząt gospodarskich'}
               </div>
             ) : (
@@ -347,12 +356,8 @@ const FarmAnimalsPage: React.FC = () => {
                     </TableHead>
                     <TableBody>
                       {animals.map((animal, index) => {
-                        // Określamy, gdzie może być numer kolczyka
                         const identifierValue = 
-                          (animal.farm_animal?.identifier) || 
-                          animal.animal_number || 
-                          '-';
-                        
+                          (animal.farm_animal?.identifier) || animal.animal_number || '-';
                         return (
                           <TableRow 
                             key={`${animal.id}-${index}`}
@@ -360,13 +365,7 @@ const FarmAnimalsPage: React.FC = () => {
                             hover
                             className="clickable-row"
                           >
-                            <TableCell 
-                              sx={{ 
-                                whiteSpace: 'pre-line', 
-                                verticalAlign: 'top',
-                                paddingY: 2
-                              }}
-                            >
+                            <TableCell sx={{ whiteSpace: 'pre-line', verticalAlign: 'top', paddingY: 2 }}>
                               {formatOwnerInfo(animal)}
                             </TableCell>
                             <TableCell>{identifierValue}</TableCell>

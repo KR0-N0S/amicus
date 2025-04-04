@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import './Tabs.css';
 
-interface TabProps {
+export interface TabProps {
   label: string;
   children: React.ReactNode;
 }
 
 export const Tab: React.FC<TabProps> = ({ children }) => {
-  return <>{children}</>;
+  return <div className="tab-content">{children}</div>;
 };
 
 interface TabsProps {
-  children: React.ReactElement<TabProps>[];
+  children: React.ReactNode;
   defaultTab?: number;
 }
 
@@ -20,8 +20,13 @@ const Tabs: React.FC<TabsProps> = ({ children, defaultTab = 0 }) => {
 
   // Filtrujemy tylko elementy Tab
   const tabs = React.Children.toArray(children).filter(
-    (child) => React.isValidElement(child) && (child.type as any).name === 'Tab'
+    (child) => React.isValidElement(child) && child.type === Tab
   ) as React.ReactElement<TabProps>[];
+
+  if (tabs.length === 0) {
+    console.error('Komponent Tabs musi zawierać przynajmniej jeden komponent Tab');
+    return null;
+  }
 
   return (
     <div className="tabs-container">
@@ -37,7 +42,14 @@ const Tabs: React.FC<TabsProps> = ({ children, defaultTab = 0 }) => {
         ))}
       </div>
       <div className="tabs-content">
-        {tabs[activeTab]}
+        {tabs.map((tab, index) => (
+          <div 
+            key={index} 
+            style={{ display: activeTab === index ? 'block' : 'none' }}
+          >
+            {tab}
+          </div>
+        ))}
       </div>
     </div>
   );

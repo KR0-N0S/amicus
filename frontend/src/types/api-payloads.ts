@@ -45,3 +45,23 @@ export interface FarmAnimalPayload {
     animal_type: 'companion';
     companion_animal: CompanionAnimalPayload;
   }
+  export interface BullCreatePayload {
+    identification_number: string;
+    name: string;
+    vet_number?: string;
+    breed?: string;
+    bull_type?: string;
+    semen_production_date?: string;
+    supplier?: string;
+    straws_last_delivery?: number;
+    current_straw_count?: number;
+    suggested_price?: number;
+    additional_info?: string;
+    vet_id?: number;
+    owner_id?: number;
+  }
+  
+  /*** Payload do aktualizacji istniejącego buhaja*/
+  export interface BullUpdatePayload extends Partial<BullCreatePayload> {
+    id?: number;
+  }

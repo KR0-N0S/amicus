@@ -1,11 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
 :root {
   --bg-color: #f8f9fa;
   --text-color: #212529;
   --sidebar-bg: #ffffff;
   --card-bg: #ffffff;
-  --primary-color: #36802d;
+  --primary-color: #0684df;
   --primary-color-rgb: 13, 110, 253;
   --secondary-color: #6c757d;
   --secondary-color-rgb: 108, 117, 125;

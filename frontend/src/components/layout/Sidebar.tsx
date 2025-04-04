@@ -123,10 +123,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onLinkClick }) => {
       submenuKey: 'inseminations',
       submenu: true,
       items: [
-        { title: 'Dodaj nową', path: '/inseminations/new' },
-        { title: 'Rejestr unasienniania', path: '/inseminations/register' },
-        { title: 'Buhaje', path: '/inseminations/bulls' },
-        { title: 'Magazyn', path: '/inseminations/inventory' },
+        { title: 'Dodaj nową', path: '/insemination/new' },
+        { title: 'Rejestr unasienniania', path: '/insemination/inseminations' },
+        { title: 'Buhaje', path: '/insemination/bulls' },
+        { title: 'Magazyn', path: '/insemination/deliveries' },
       ],
     },
     {
@@ -156,7 +156,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onLinkClick }) => {
   return (
     <div ref={sidebarRef} className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
       <div className="sidebar-header">
-        <img src="/assets/images/logo.svg" alt="Logo" className="sidebar-logo" />
+        <img src="/images/logo.svg" alt="Logo" className="sidebar-logo" />
         {isOpen && <span className="sidebar-title">vetcloud.pl</span>}
       </div>
       <nav className="sidebar-nav">
