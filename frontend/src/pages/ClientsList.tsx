@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { FaUserPlus, FaSearch, FaFile, FaPaw, FaMoneyBillWave } from 'react-icons/fa';
 import Card from '../components/common/Card';
 import Table from '../components/common/Table';
-import Button from '../components/common/Button'; // Poprawiony import (wcześniej był components.common/Button)
+import Button from '../components/common/Button';
 import { useAuth } from '../context/AuthContext';
-import { fetchClients } from '../api/userApi';
+import { fetchClients, searchClients } from '../api/userApi';
 import { Client, OrganizationWithRole } from '../types/models';
 import './ClientsList.css';
+import useDebounce from '../hooks/useDebounce';
 
 interface AuthUser {
   id: number;
@@ -22,21 +23,18 @@ const ClientsList: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [totalResults, setTotalResults] = useState<number>(0);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const itemsPerPage = 20; // Zgodnie z konfiguracją w API
+
   const navigate = useNavigate();
   
   const { user } = useAuth() as { user: AuthUser | null };
   const organizationId = user?.organizations?.[0]?.id;
-
-  // Używamy memoizacji, żeby nie przeliczać filtrowania przy każdej zmianie stanu
-  const filteredClients = useMemo(() => {
-    return clients.filter(
-      (client) =>
-        client.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (client.phone && client.phone.includes(searchTerm))
-    );
-  }, [clients, searchTerm]);
+  
+  // Używamy debounce do ograniczenia liczby zapytań podczas wpisywania
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   // Memoizacja kolumn – są statyczne, więc nie muszą być przeliczane przy każdym renderze
   const columns = useMemo(() => [
@@ -108,7 +106,7 @@ const ClientsList: React.FC = () => {
         </div>
       )
     }
-  ], []); // zależności puste, ponieważ kolumny są statyczne
+  ], []);
 
   // Używamy useCallback, by uniknąć zmiany referencji funkcji przy każdym renderze
   const handleRowClick = useCallback((client: Client) => {
@@ -130,29 +128,59 @@ const ClientsList: React.FC = () => {
     navigate(`/clients/${clientId}/billing`);
   }, [navigate]);
 
-  useEffect(() => {
-    const loadClients = async () => {
-      try {
-        setIsLoading(true);
-        if (user) {
-          console.log(`Pobieranie klientów dla organizacji: ${organizationId || 'brak'}`);
-          const data = await fetchClients(organizationId ? Number(organizationId) : undefined);
-          console.log("Otrzymane dane klientów:", data);
-          setClients(data);
-          setError(null);
-        } else {
-          setError('Użytkownik nie jest zalogowany.');
-        }
-      } catch (err) {
-        console.error('Error fetching clients:', err);
-        setError('Nie udało się pobrać listy klientów. Spróbuj ponownie później.');
-      } finally {
-        setIsLoading(false);
+  // Funkcja do pobierania klientów z wyszukiwaniem lub bez
+  const loadClients = useCallback(async (search?: string, page: number = 1) => {
+    if (!user) return;
+    
+    setIsLoading(true);
+    try {
+      let data;
+      
+      if (search && search.length >= 3) {
+        console.log(`Wyszukiwanie klientów, fraza: "${search}", strona: ${page}`);
+        setIsSearching(true);
+        const response = await searchClients(search, ['client', 'farmer'], organizationId ? Number(organizationId) : undefined, page);
+        
+        data = response.data.clients || [];
+        setTotalResults(response.data.pagination?.total || data.length);
+        console.log(`Znaleziono ${data.length} klientów (łącznie ${response.data.pagination?.total || data.length})`);
+      } else {
+        console.log(`Pobieranie wszystkich klientów dla organizacji: ${organizationId || 'brak'}`);
+        setIsSearching(false);
+        data = await fetchClients(organizationId ? Number(organizationId) : undefined);
+        setTotalResults(data.length);
       }
-    };
+      
+      setClients(data);
+      setError(null);
+    } catch (err) {
+      console.error('Błąd podczas pobierania klientów:', err);
+      setError('Nie udało się pobrać listy klientów. Spróbuj ponownie później.');
+      setClients([]);
+      setTotalResults(0);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, organizationId]);
 
+  // Handler do zmiany strony
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(page);
+    loadClients(debouncedSearchTerm, page);
+  }, [debouncedSearchTerm, loadClients]);
+
+  // Efekt do ładowania danych przy pierwszym renderowaniu i zmianie organizacji
+  useEffect(() => {
     loadClients();
-  }, [organizationId, user]);
+  }, [organizationId, user, loadClients]);
+
+  // Efekt do wyszukiwania klientów gdy zmieni się fraza wyszukiwania
+  useEffect(() => {
+    if (debouncedSearchTerm !== undefined) {
+      setCurrentPage(1); // Reset do pierwszej strony przy nowym wyszukiwaniu
+      loadClients(debouncedSearchTerm, 1);
+    }
+  }, [debouncedSearchTerm, loadClients]);
 
   const userRole = user?.organizations?.find(org =>
     org.id === Number(organizationId))?.role?.toLowerCase();
@@ -183,6 +211,31 @@ const ClientsList: React.FC = () => {
     </div>
   );
 
+  // Komponent paginacji
+  const Pagination = () => (
+    <div className="pagination">
+      <button 
+        onClick={() => handlePageChange(currentPage - 1)} 
+        disabled={currentPage === 1 || isLoading}
+        className="pagination-button"
+      >
+        &laquo; Poprzednia
+      </button>
+      
+      <span className="pagination-info">
+        Strona {currentPage} z {Math.max(1, Math.ceil(totalResults / itemsPerPage))}
+      </span>
+      
+      <button 
+        onClick={() => handlePageChange(currentPage + 1)} 
+        disabled={currentPage >= Math.ceil(totalResults / itemsPerPage) || isLoading}
+        className="pagination-button"
+      >
+        Następna &raquo;
+      </button>
+    </div>
+  );
+
   return (
     <div className="clients-list">
       <h1 className="page-title">Lista klientów</h1>
@@ -191,21 +244,23 @@ const ClientsList: React.FC = () => {
           <div className="loading-spinner">Ładowanie danych...</div>
         ) : error ? (
           <div className="error-message">{error}</div>
-        ) : filteredClients.length === 0 ? (
+        ) : clients.length === 0 ? (
           <div className="empty-message">
-            Brak klientów do wyświetlenia
+            {debouncedSearchTerm.length >= 3 
+              ? "Brak wyników dla podanych kryteriów wyszukiwania" 
+              : "Brak klientów do wyświetlenia"}
             {user && <p>Zalogowany jako: {user.email} (ID: {user.id})</p>}
             {organizationId && <p>Organizacja ID: {organizationId}</p>}
             {userRole && <p>Rola: {userRole}</p>}
           </div>
         ) : (
-          // Rozszerzenie tabeli do pełnej szerokości rodzica
           <div style={{ width: '100%' }}>
             <Table
               columns={columns}
-              data={filteredClients}
+              data={clients}
               onRowClick={handleRowClick}
             />
+            {totalResults > itemsPerPage && <Pagination />}
           </div>
         )}
       </Card>

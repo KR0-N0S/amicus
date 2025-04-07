@@ -162,6 +162,20 @@ const FarmAnimalFormPage: React.FC = () => {
         return;
       }
       
+      // Przygotuj obiekt farm_animal
+      const farmAnimal: any = {
+        identifier: identifier,
+        origin: values.origin || '',
+        additional_id: values.additional_number || null,
+      };
+      
+      // Dodaj registration_date tylko jeśli została podana
+      if (values.registration_date) {
+        farmAnimal.registration_date = typeof values.registration_date === 'string'
+          ? values.registration_date
+          : values.registration_date.toISOString().split('T')[0];
+      }
+      
       // Użyj danych przesłanych z formularza, uzupełniając o organization_id oraz konwersje dat
       const animalData = {
         ...values,
@@ -173,12 +187,14 @@ const FarmAnimalFormPage: React.FC = () => {
               ? values.birth_date
               : values.birth_date.toISOString().split('T')[0])
           : null,
-        registration_date: values.registration_date
-          ? (typeof values.registration_date === 'string'
-              ? values.registration_date
-              : values.registration_date.toISOString().split('T')[0])
-          : null,
+        farm_animal: farmAnimal
       };
+      
+      // Usuń pola z głównego obiektu, które należą do farm_animal
+      delete animalData.registration_date;
+      delete animalData.origin;
+      delete animalData.additional_number;
+      delete animalData.identifier;
       
       console.log('Przesyłane dane zwierzęcia:', animalData);
       

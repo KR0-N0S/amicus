@@ -1,6 +1,8 @@
 const express = require('express');
 const bullController = require('../controllers/bullController');
 const { verifyToken } = require('../middleware/authMiddleware');
+const { bullValidator } = require('../middleware/validator');
+const { verifyResourceAccess } = require('../middleware/resourceAccessMiddleware');
 
 const router = express.Router();
 
@@ -9,198 +11,199 @@ router.use(verifyToken);
 
 /**
  * @swagger
- * /api/bulls:
+ * /bulls:
  *   get:
- *     summary: Pobieranie listy byków
- *     tags: [Bulls]
- *     security:
- *       - bearerAuth: []
+ *     summary: Pobierz listę buhajów
+ *     description: Pobiera listę buhajów z opcjonalnym filtrowaniem i sortowaniem
  *     parameters:
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *         description: Numer strony (domyślnie 1)
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *         description: Liczba elementów na stronie (domyślnie 10)
  *       - in: query
  *         name: search
  *         schema:
  *           type: string
- *         description: Szukana fraza
+ *         description: Fraza wyszukiwania
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Numer strony
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Liczba elementów na stronę
  *     responses:
  *       200:
- *         description: Lista byków
- *       401:
- *         description: Brak autentykacji
+ *         description: Lista buhajów
  */
-router.get('/', bullController.getAllBulls);
+router.get('/', 
+  verifyResourceAccess({ resourceType: 'bull' }),
+  bullController.getBulls
+);
 
 /**
  * @swagger
- * /api/bulls:
+ * /bulls:
  *   post:
- *     summary: Tworzenie nowego byka
- *     tags: [Bulls]
- *     security:
- *       - bearerAuth: []
+ *     summary: Dodaj nowego buhaja
+ *     description: Tworzy nowego buhaja w systemie
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - identification_number
  *             properties:
+ *               name:
+ *                 type: string
  *               identification_number:
  *                 type: string
- *               vet_number:
- *                 type: string
- *               breed:
- *                 type: string
- *               semen_production_date:
- *                 type: string
- *                 format: date
- *               supplier:
- *                 type: string
- *               bull_type:
- *                 type: string
- *               last_delivery_date:
- *                 type: string
- *                 format: date
- *               straws_last_delivery:
- *                 type: integer
- *               current_straw_count:
- *                 type: integer
- *               suggested_price:
- *                 type: number
- *               additional_info:
- *                 type: string
- *               favorite:
- *                 type: boolean
- *               vet_id:
- *                 type: integer
  *     responses:
  *       201:
- *         description: Byk utworzony
- *       400:
- *         description: Błędne dane wejściowe
- *       401:
- *         description: Brak autentykacji
+ *         description: Buhaj utworzony pomyślnie
  */
-router.post('/', bullController.createBull);
+router.post('/', 
+  bullValidator, 
+  verifyResourceAccess({ resourceType: 'bull' }),
+  bullController.createBull
+);
 
 /**
  * @swagger
- * /api/bulls/{id}:
+ * /bulls/{id}:
  *   get:
- *     summary: Pobieranie szczegółów byka
- *     tags: [Bulls]
- *     security:
- *       - bearerAuth: []
+ *     summary: Pobierz buhaja
+ *     description: Pobiera szczegóły konkretnego buhaja
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: integer
+ *         description: ID buhaja
  *     responses:
  *       200:
- *         description: Szczegóły byka
- *       401:
- *         description: Brak autentykacji
- *       404:
- *         description: Byk nie znaleziony
+ *         description: Dane buhaja
  */
-router.get('/:id', bullController.getBull);
+router.get('/:id', 
+  verifyResourceAccess({ resourceType: 'bull', paramName: 'id' }),
+  bullController.getBull
+);
 
 /**
  * @swagger
- * /api/bulls/{id}:
+ * /bulls/{id}:
  *   put:
- *     summary: Aktualizacja byka
- *     tags: [Bulls]
- *     security:
- *       - bearerAuth: []
+ *     summary: Aktualizuj buhaja
+ *     description: Aktualizuje dane konkretnego buhaja
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: integer
+ *         description: ID buhaja
  *     requestBody:
- *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             properties:
- *               identification_number:
- *                 type: string
- *               vet_number:
- *                 type: string
- *               breed:
- *                 type: string
- *               semen_production_date:
- *                 type: string
- *                 format: date
- *               supplier:
- *                 type: string
- *               bull_type:
- *                 type: string
- *               last_delivery_date:
- *                 type: string
- *                 format: date
- *               straws_last_delivery:
- *                 type: integer
- *               current_straw_count:
- *                 type: integer
- *               suggested_price:
- *                 type: number
- *               additional_info:
- *                 type: string
- *               favorite:
- *                 type: boolean
- *               vet_id:
- *                 type: integer
  *     responses:
  *       200:
- *         description: Byk zaktualizowany
- *       400:
- *         description: Błędne dane wejściowe
- *       401:
- *         description: Brak autentykacji
- *       404:
- *         description: Byk nie znaleziony
+ *         description: Buhaj zaktualizowany pomyślnie
  */
-router.put('/:id', bullController.updateBull);
+router.put('/:id', 
+  verifyResourceAccess({ resourceType: 'bull', paramName: 'id' }),
+  bullController.updateBull
+);
 
 /**
  * @swagger
- * /api/bulls/{id}:
+ * /bulls/{id}:
  *   delete:
- *     summary: Usuwanie byka
- *     tags: [Bulls]
- *     security:
- *       - bearerAuth: []
+ *     summary: Usuń buhaja
+ *     description: Usuwa konkretnego buhaja
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: integer
+ *         description: ID buhaja
  *     responses:
  *       200:
- *         description: Byk usunięty
- *       401:
- *         description: Brak autentykacji
- *       404:
- *         description: Byk nie znaleziony
+ *         description: Buhaj usunięty pomyślnie
  */
-router.delete('/:id', bullController.deleteBull);
+router.delete('/:id', 
+  verifyResourceAccess({ resourceType: 'bull', paramName: 'id' }),
+  bullController.deleteBull
+);
+
+/**
+ * @swagger
+ * /bulls/{id}/stats:
+ *   get:
+ *     summary: Pobierz statystyki buhaja
+ *     description: Pobiera statystyki dla konkretnego buhaja
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID buhaja
+ *     responses:
+ *       200:
+ *         description: Statystyki buhaja
+ */
+router.get('/:id/stats', 
+  verifyResourceAccess({ resourceType: 'bull', paramName: 'id' }),
+  bullController.getBullStats
+);
+
+/**
+ * @swagger
+ * /bulls/{id}/deliveries:
+ *   get:
+ *     summary: Pobierz dostawy nasienia dla buhaja
+ *     description: Pobiera historię dostaw nasienia dla konkretnego buhaja
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID buhaja
+ *     responses:
+ *       200:
+ *         description: Historia dostaw nasienia
+ */
+router.get('/:id/deliveries', 
+  verifyResourceAccess({ resourceType: 'bull', paramName: 'id' }),
+  bullController.getBullDeliveries
+);
+
+/**
+ * @swagger
+ * /bulls/{id}/inseminations:
+ *   get:
+ *     summary: Pobierz inseminacje z użyciem buhaja
+ *     description: Pobiera historię inseminacji wykonanych z użyciem nasienia konkretnego buhaja
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID buhaja
+ *     responses:
+ *       200:
+ *         description: Historia inseminacji
+ */
+router.get('/:id/inseminations', 
+  verifyResourceAccess({ resourceType: 'bull', paramName: 'id' }),
+  bullController.getBullInseminations
+);
 
 module.exports = router;

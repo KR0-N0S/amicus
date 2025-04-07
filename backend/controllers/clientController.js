@@ -11,8 +11,6 @@ const excludePassword = (user) => {
 };
 
 // Pobranie listy klientów w zależności od roli użytkownika
-// Zmiana w getClients, gdzie sprawdzamy rolę
-// W metodzie getClients, dodajmy więcej logów
 exports.getClients = async (req, res, next) => {
   try {
     const { userId, user } = req;
@@ -402,5 +400,151 @@ exports.deactivateClient = async (req, res, next) => {
   } catch (error) {
     console.error('[CLIENT_CONTROLLER] Error:', error);
     next(new AppError('Wystąpił błąd podczas usuwania powiązania klienta z organizacją', 500));
+  }
+};
+
+// Funkcja do wyszukiwania klientów z obsługą literówek
+exports.searchClients = async (req, res, next) => {
+  try {
+    const { userId, user } = req;
+    const { query, roles = 'client,farmer', page = 1, limit = 20 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    const organizationId = req.query.organizationId || 
+                        req.params.organizationId || 
+                        (user.organizations && user.organizations.length > 0 ? user.organizations[0].id : null);
+    
+    console.log(`[CLIENT_CONTROLLER] Wyszukiwanie klientów dla użytkownika ${userId}, fraza: "${query}", role: ${roles}, organizacja: ${organizationId}`);
+    
+    if (!organizationId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Nie podano identyfikatora organizacji'
+      });
+    }
+    
+    // Sprawdź rolę użytkownika w organizacji
+    let userRoleInOrg = null;
+    if (user.organizations) {
+      const userOrg = user.organizations.find(org => org.id && org.id.toString() === organizationId.toString());
+      if (userOrg) {
+        userRoleInOrg = userOrg.role ? userOrg.role.toLowerCase() : null;
+        console.log(`[CLIENT_CONTROLLER] Rola użytkownika ${userId} w organizacji ${organizationId}: ${userRoleInOrg}`);
+      }
+    }
+    
+    if (!userRoleInOrg) {
+      console.log(`[CLIENT_CONTROLLER] Nie znaleziono roli użytkownika ${userId} w organizacji ${organizationId}`);
+      return res.status(403).json({
+        status: 'error',
+        message: 'Brak uprawnień - nie znaleziono roli w organizacji'
+      });
+    }
+    
+    // Określenie, jakie role mogą być wyszukiwane w zależności od roli użytkownika
+    let allowedRolesToSearch = [];
+    
+    // Owner i SuperAdmin mogą wyszukiwać wszystkich
+    if (['owner', 'superadmin'].includes(userRoleInOrg)) {
+      allowedRolesToSearch = roles ? roles.split(',') : ['client', 'farmer'];
+      console.log(`[CLIENT_CONTROLLER] Użytkownik ${userId} ma rolę ${userRoleInOrg} - może wyszukiwać wszystkich klientów`);
+    }
+    // Employee, OfficeStaff itp. mogą wyszukiwać tylko klientów
+    else if (['employee', 'officestaff', 'inseminator', 'vettech', 'vet'].includes(userRoleInOrg)) {
+      allowedRolesToSearch = ['client', 'farmer'];
+      console.log(`[CLIENT_CONTROLLER] Użytkownik ${userId} ma rolę ${userRoleInOrg} - może wyszukiwać tylko klientów i rolników`);
+    }
+    // Client, Farmer nie mogą wyszukiwać innych, tylko siebie
+    else if (['client', 'farmer'].includes(userRoleInOrg)) {
+      // Jeśli klient/rolnik szuka samego siebie, pozwalamy na to
+      if (query && (
+        user.first_name.toLowerCase().includes(query.toLowerCase()) || 
+        user.last_name.toLowerCase().includes(query.toLowerCase()) ||
+        user.email.toLowerCase().includes(query.toLowerCase()) ||
+        `${user.first_name} ${user.last_name}`.toLowerCase().includes(query.toLowerCase())
+      )) {
+        console.log(`[CLIENT_CONTROLLER] Klient/rolnik ${userId} wyszukuje samego siebie`);
+        
+        const singleUser = await userRepository.getSingleUser(userId);
+        const usersWithoutPassword = singleUser ? [excludePassword(singleUser)] : [];
+        
+        return res.status(200).json({
+          status: 'success',
+          results: usersWithoutPassword.length,
+          data: {
+            clients: usersWithoutPassword,
+            pagination: {
+              total: usersWithoutPassword.length,
+              limit: parseInt(limit),
+              offset: parseInt(offset),
+              pages: 1
+            }
+          }
+        });
+      } else {
+        console.log(`[CLIENT_CONTROLLER] Użytkownik ${userId} ma rolę ${userRoleInOrg} - nie może wyszukiwać innych użytkowników`);
+        return res.status(403).json({
+          status: 'error',
+          message: 'Brak uprawnień do wyszukiwania innych użytkowników'
+        });
+      }
+    }
+    
+    // Sprawdź czy fraza wyszukiwania ma co najmniej 3 znaki
+    if (query && typeof query === 'string' && query.trim().length < 3) {
+      console.log(`[CLIENT_CONTROLLER] Fraza wyszukiwania za krótka (${query.trim().length} znaków)`);
+      return res.status(200).json({
+        status: 'success',
+        results: 0,
+        data: {
+          clients: [],
+          pagination: {
+            total: 0,
+            limit: parseInt(limit),
+            offset: parseInt(offset),
+            pages: 0
+          }
+        },
+        message: 'Fraza wyszukiwania musi mieć co najmniej 3 znaki'
+      });
+    }
+    
+    // Wykonaj wyszukiwanie z nową funkcją
+    console.log(`[CLIENT_CONTROLLER] Wykonuję wyszukiwanie z parametrami: query=${query}, roles=${allowedRolesToSearch.join(',')}`);
+    
+    try {
+      const result = await userRepository.searchUsers(
+        query, 
+        allowedRolesToSearch, 
+        organizationId,
+        parseInt(limit),
+        parseInt(offset)
+      );
+      
+      // Usuń hasła z wyników
+      const usersWithoutPassword = result.users ? result.users.map(excludePassword) : [];
+      
+      console.log(`[CLIENT_CONTROLLER] Znaleziono ${usersWithoutPassword.length} wyników wyszukiwania (łącznie ${result.pagination ? result.pagination.total : 0})`);
+      
+      res.status(200).json({
+        status: 'success',
+        results: usersWithoutPassword.length,
+        data: {
+          clients: usersWithoutPassword,
+          pagination: result.pagination || {
+            total: usersWithoutPassword.length,
+            limit: parseInt(limit),
+            offset: parseInt(offset),
+            pages: Math.ceil(usersWithoutPassword.length / parseInt(limit))
+          }
+        }
+      });
+    } catch (error) {
+      console.error('[CLIENT_CONTROLLER] Błąd podczas wyszukiwania:', error);
+      next(new AppError(`Wystąpił błąd podczas wyszukiwania klientów: ${error.message}`, 500));
+    }
+  } catch (error) {
+    console.error('[CLIENT_CONTROLLER] Error:', error);
+    next(new AppError('Wystąpił błąd podczas wyszukiwania klientów', 500));
   }
 };

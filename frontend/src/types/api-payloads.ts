@@ -65,3 +65,50 @@ export interface FarmAnimalPayload {
   export interface BullUpdatePayload extends Partial<BullCreatePayload> {
     id?: number;
   }
+  // Dodajmy interfejsy dla payloadów do tworzenia i aktualizacji dostawców
+
+export interface SemenProviderCreatePayload {
+  name: string;
+  vet_id_number: string;
+  address_street?: string;
+  address_city?: string;
+  address_postal_code?: string;
+  address_province?: string;
+  address_country?: string;
+  contact_phone?: string;
+  contact_email?: string;
+}
+
+export interface SemenProviderUpdatePayload extends Partial<SemenProviderCreatePayload> {
+  id: number;
+}
+
+export interface SemenDeliveryCreatePayload {
+  provider_id: number;
+  delivery_date: string;
+  invoice_number?: string;
+  notes?: string;
+  items: Array<{
+    bull_id: number;
+    straw_count: number;
+    straw_price?: number;
+    batch_number?: string;
+    production_date?: string;
+    expiration_date?: string;
+    notes?: string;
+  }>;
+}
+
+export interface SemenDeliveryUpdatePayload extends Partial<Omit<SemenDeliveryCreatePayload, 'items'>> {
+  delivery_id: number;
+  items?: Array<{
+    item_id?: number;
+    bull_id: number;
+    straw_count: number;
+    straw_price?: number;
+    batch_number?: string;
+    production_date?: string;
+    expiration_date?: string;
+    notes?: string;
+  }>;
+}

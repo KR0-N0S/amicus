@@ -2,6 +2,14 @@ import axiosInstance from './axios';
 import axios, { AxiosError } from 'axios';
 import { ClientsResponse, ClientResponse, Client } from '../types/models';
 
+// Konfiguracja
+const ITEMS_PER_PAGE = 20; // Standardowa liczba elementów na stronę
+const MIN_SEARCH_LENGTH = 3; // Minimalna długość frazy wyszukiwania
+
+// Cache dla ostatnich wyników wyszukiwania
+const searchCache = new Map<string, {data: any, timestamp: number}>();
+const CACHE_TTL = 30000; // 30 sekund w milisekundach
+
 // ============= KLIENCI / ROLNICY =============
 
 export const fetchClients = async (organizationId?: number): Promise<Client[]> => {
@@ -274,9 +282,140 @@ export const updateEmployee = async (employeeId: number, employeeData: any, orga
   }
 };
 
+// ============= WYSZUKIWANIE KLIENTÓW =============
+
+/**
+ * Funkcja do mierzenia czasu wykonania zapytania API
+ * @private
+ */
+const measureResponseTime = async <T>(
+  promise: Promise<T>,
+  endpoint: string
+): Promise<T> => {
+  const startTime = performance.now();
+  try {
+    const result = await promise;
+    const endTime = performance.now();
+    console.log(`API call to ${endpoint} completed in ${(endTime - startTime).toFixed(2)}ms`);
+    return result;
+  } catch (error) {
+    const endTime = performance.now();
+    console.error(`API call to ${endpoint} failed after ${(endTime - startTime).toFixed(2)}ms:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Funkcja do generowania klucza cache
+ * @private
+ */
+const generateCacheKey = (searchTerm: string, roles: string[], organizationId?: number, page?: number): string => {
+  return `search:${searchTerm}:${roles.join(',')}:${organizationId || 'no-org'}:page${page || 1}`;
+};
+
+/**
+ * Funkcja do wyszukiwania klientów
+ * Wykorzystuje wyszukiwanie po stronie backendu z obsługą literówek i drobnych błędów
+ * @param searchTerm Fraza wyszukiwania
+ * @param roles Role użytkowników do wyszukania (domyślnie client,farmer)
+ * @param organizationId ID organizacji
+ * @param page Numer strony (dla paginacji)
+ * @param limit Liczba wyników na stronę
+ * @returns Obiekt z klientami i informacjami o paginacji
+ */
+export const searchClients = async (
+  searchTerm: string, 
+  roles: string[] = ['client', 'farmer'], 
+  organizationId?: number,
+  page: number = 1,
+  limit: number = ITEMS_PER_PAGE
+) => {
+  try {
+    // Walidacja i czyszczenie frazy wyszukiwania
+    const trimmedSearchTerm = searchTerm?.trim() || '';
+    
+    // Ignorujemy zbyt krótkie frazy
+    if (trimmedSearchTerm.length < MIN_SEARCH_LENGTH) {
+      console.log(`Search term too short (${trimmedSearchTerm.length} chars), minimum is ${MIN_SEARCH_LENGTH}`);
+      return { 
+        status: 'success',
+        data: { 
+          clients: [],
+          pagination: {
+            total: 0,
+            limit: limit,
+            offset: (page - 1) * limit,
+            pages: 0
+          }
+        }
+      };
+    }
+
+    // Sprawdzenie cache
+    const cacheKey = generateCacheKey(trimmedSearchTerm, roles, organizationId, page);
+    const cachedResponse = searchCache.get(cacheKey);
+    
+    if (cachedResponse && (Date.now() - cachedResponse.timestamp < CACHE_TTL)) {
+      console.log(`Using cached response for search "${trimmedSearchTerm}" (page ${page})`);
+      return cachedResponse.data;
+    }
+
+    // Przygotowanie parametrów zapytania
+    const queryParams = new URLSearchParams({
+      query: trimmedSearchTerm,
+      roles: roles.join(','),
+      page: page.toString(),
+      limit: limit.toString()
+    });
+    
+    if (organizationId) {
+      queryParams.append('organizationId', organizationId.toString());
+    }
+    
+    console.log(`Searching clients with query: "${trimmedSearchTerm}", roles: ${roles.join(',')}, page: ${page}, limit: ${limit}`);
+    
+    // Wykonanie zapytania z pomiarem czasu
+    const endpoint = `/users/search?${queryParams}`;
+    const response = await measureResponseTime(
+      axiosInstance.get(endpoint),
+      endpoint
+    );
+    
+    console.log(`Search API response: Found ${response.data.results} clients, total: ${response.data.data?.pagination?.total || 0}`);
+    
+    // Zapisanie wyników do cache
+    searchCache.set(cacheKey, {
+      data: response.data,
+      timestamp: Date.now()
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error searching clients:', error);
+    
+    // W przypadku błędu zwracamy pusty wynik
+    return { 
+      status: 'error',
+      message: 'Wystąpił błąd podczas wyszukiwania klientów',
+      data: { 
+        clients: [],
+        pagination: {
+          total: 0,
+          limit: limit,
+          offset: (page - 1) * limit,
+          pages: 0
+        }
+      }
+    };
+  }
+};
+
 // ============= WSPÓLNE FUNKCJE =============
 
-// Funkcja do generowania tymczasowego hasła
+/**
+ * Funkcja do generowania tymczasowego hasła
+ * @private
+ */
 function generateTemporaryPassword(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
   let password = '';
@@ -288,39 +427,18 @@ function generateTemporaryPassword(): string {
   return password;
 }
 
-// Uniwersalna funkcja do wyszukiwania użytkowników z różnymi rolami
-export const searchUsers = async (searchTerm: string, roles: string[] = ['farmer', 'client'], organizationId?: number) => {
-  try {
-    if (searchTerm.length < 3) {
-      return { data: [] };
-    }
-
-    const queryParams = new URLSearchParams({
-      query: searchTerm,
-      roles: roles.join(',') // Możliwość filtrowania po dowolnych rolach
-    });
-    
-    if (organizationId) {
-      queryParams.append('organizationId', organizationId.toString());
-    }
-    
-    console.log(`Searching users with query: ${searchTerm}, roles: ${roles.join(',')}, params: ${queryParams}`);
-    
-    const response = await axiosInstance.get(`/users/search?${queryParams}`);
-    console.log('User search API response:', response.data);
-    
-    return response.data;
-  } catch (error) {
-    console.error('Error searching users:', error);
-    return { data: [] };
-  }
+/**
+ * Czyści cache wyników wyszukiwania
+ */
+export const clearSearchCache = (): void => {
+  searchCache.clear();
+  console.log('Search cache cleared');
 };
 
 export const fetchOwnerDetails = async (ownerId: string | number): Promise<any> => {
   try {
     console.log(`Pobieranie danych właściciela o ID: ${ownerId}`);
     
-    // Używamy poprawnego endpointu zgodnie ze specyfikacją API
     const response = await axiosInstance.get(`/users/clients/${ownerId}`);
     
     if (!response.data || !response.data.data || !response.data.data.client) {

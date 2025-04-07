@@ -29,7 +29,8 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
 import 'dayjs/locale/pl';
 import { Animal } from '../../types/models';
-import { searchUsers, fetchOwnerDetails } from '../../api/userApi';
+import { searchClients, fetchOwnerDetails } from '../../api/userApi';
+import useDebounce from '../../hooks/useDebounce';
 
 interface FarmAnimalFormProps {
   initialValues: Partial<Animal> & { owner_data?: { id: string, name: string } };
@@ -52,7 +53,6 @@ const validationSchema = yup.object({
   sex: yup.string().required('Płeć jest wymagana'),
   animal_type: yup.string().required('Typ zwierzęcia jest wymagany'),
   birth_date: yup.date().nullable(),
-  // Usunięto walidację dla age, ponieważ pole zostało usunięte z bazy danych
   additional_number: yup.string(),
   breed: yup.string(),
   weight: yup.number().positive('Waga musi być większa od 0').nullable(),
@@ -75,6 +75,18 @@ const validationSchema = yup.object({
   }
 );
 
+// Funkcja pomocnicza do formatowania daty w formacie YYYY-MM-DD
+const formatDateToYYYYMMDD = (date: Date | null): string | null => {
+  if (!date) return null;
+  
+  // Format: YYYY-MM-DD
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
+};
+
 const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
   initialValues,
   onSubmit,
@@ -90,6 +102,10 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
   const [selectedOwner, setSelectedOwner] = useState<{id: string, label: string} | null>(null);
   const [ownerDetails, setOwnerDetails] = useState<any>(null);
   const [isLoadingOwnerDetails, setIsLoadingOwnerDetails] = useState<boolean>(false);
+  const [isSearchingOwners, setIsSearchingOwners] = useState<boolean>(false);
+  
+  // Używamy debounce aby ograniczyć liczbę zapytań podczas wpisywania
+  const debouncedSearchQuery = useDebounce(ownerSearchQuery, 300);
   
   // Sprawdzenie uprawnień użytkownika
   const isAdminRole = ADMIN_ROLES.includes(userRole);
@@ -98,24 +114,39 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
   // Wyszukiwanie właściciela - tylko dla ról administracyjnych
   useEffect(() => {
     const fetchOwners = async () => {
-      if (ownerSearchQuery.length >= 3 && isAdminRole) {
+      if (debouncedSearchQuery.length >= 3 && isAdminRole) {
+        setIsSearchingOwners(true);
         try {
-          const response = await searchUsers(ownerSearchQuery, ['farmer', 'client'], currentOrganizationId);
+          // Używamy nowej funkcji searchClients zamiast searchUsers
+          const response = await searchClients(
+            debouncedSearchQuery, 
+            ['farmer', 'client'], 
+            currentOrganizationId
+          );
           
-          const mappedUsers = response.data.map((user: any) => ({
+          // Nowa struktura odpowiedzi: response.data.clients zamiast response.data
+          const clients = response.data?.clients || [];
+          
+          const mappedUsers = clients.map((user: any) => ({
             id: user.id.toString(),
             label: `${user.first_name} ${user.last_name} - ${user.city || ''}, ${user.street || ''}`
           }));
           
           setOwnerOptions(mappedUsers);
         } catch (error) {
-          console.error('Błąd podczas wyszukiwania użytkowników:', error);
+          console.error('Błąd podczas wyszukiwania klientów:', error);
+          setOwnerOptions([]);
+        } finally {
+          setIsSearchingOwners(false);
         }
+      } else if (debouncedSearchQuery.length < 3) {
+        // Czyszczenie opcji gdy fraza wyszukiwania jest za krótka
+        setOwnerOptions([]);
       }
     };
     
     fetchOwners();
-  }, [ownerSearchQuery, isAdminRole, currentOrganizationId]);
+  }, [debouncedSearchQuery, isAdminRole, currentOrganizationId]);
 
   // Pobieranie szczegółowych danych właściciela po jego wybraniu
   useEffect(() => {
@@ -177,7 +208,6 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
       breed: initialValues.breed || '',
       sex: initialValues.sex || '',
       birth_date: initialValues.birth_date ? new Date(initialValues.birth_date) : null,
-      // Usunięto pole age - będzie dynamicznie obliczane na podstawie daty urodzenia
       weight: initialValues.weight || '',
       
       // Pola specyficzne dla farm_animals
@@ -207,8 +237,8 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
         species: values.species,
         sex: values.sex,
         breed: values.breed,
-        birth_date: values.birth_date,
-        // Usunięto pole age - będzie obliczane na backendzie
+        // Formatujemy daty do wymaganego formatu YYYY-MM-DD
+        birth_date: formatDateToYYYYMMDD(values.birth_date),
         weight: values.weight ? Number(values.weight) : null,
         owner_id: isFarmerOrClient ? undefined : values.owner_id,
         notes: values.notes,
@@ -219,8 +249,8 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
       const farmAnimalData = {
         // Dane do tabeli farm_animals
         identifier: values.identifier,
-        // Usunięto zbędne pola dodatkowe, które są pobierane z danych właściciela
-        registration_date: values.registration_date,
+        // Formatujemy datę rejestracji do wymaganego formatu YYYY-MM-DD
+        registration_date: formatDateToYYYYMMDD(values.registration_date),
         origin: values.origin,
         // Dodatkowy identyfikator jako opcjonalne pole
         additional_id: values.additional_number || null,
@@ -273,6 +303,7 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
                 onInputChange={(event, newInputValue) => {
                   setOwnerSearchQuery(newInputValue);
                 }}
+                loading={isSearchingOwners}
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -280,9 +311,21 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
                     variant="outlined"
                     fullWidth
                     error={formik.touched.owner_id && Boolean(formik.errors.owner_id)}
-                    helperText={formik.touched.owner_id && formik.errors.owner_id as string}
+                    helperText={(formik.touched.owner_id && formik.errors.owner_id as string) || 
+                      "Wpisz co najmniej 3 znaki, aby rozpocząć wyszukiwanie"}
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {isSearchingOwners ? <CircularProgress color="inherit" size={20} /> : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
                   />
                 )}
+                noOptionsText="Brak wyników"
+                loadingText="Wyszukiwanie..."
               />
             </Grid>
             {onAddNewClient && (
@@ -517,8 +560,12 @@ const FarmAnimalForm: React.FC<FarmAnimalFormProps> = ({
                     helperText: formik.touched.registration_date && formik.errors.registration_date as string,
                   }
                 }}
+                format="YYYY-MM-DD"
               />
             </LocalizationProvider>
+            <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1 }}>
+              Format daty: RRRR-MM-DD
+            </Typography>
           </Grid>
           
           {/* Pochodzenie */}

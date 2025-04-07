@@ -22,7 +22,13 @@ import {
   PaginationItem,
   Box,
   Typography,
-  Chip
+  Chip,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  SelectChangeEvent,
+  Grid
 } from '@mui/material';
 
 import Card from '../../components/common/Card';
@@ -30,6 +36,7 @@ import Button from '../../components/common/Button';
 import { getBulls } from '../../api/bullService';
 import { Bull } from '../../types/models';
 import useDebounce from '../../hooks/useDebounce';
+import { useAuth } from '../../context/AuthContext';
 
 import '../DataList.css';
 
@@ -37,43 +44,106 @@ const ITEMS_PER_PAGE = 25;
 const SEARCH_DEBOUNCE_TIME = 500;
 const MIN_SEARCH_LENGTH = 3;
 
+// Rozszerzenie interfejsu Bull dla typowania
+interface ExtendedBull extends Bull {
+  name?: string;
+  veterinary_number?: string; // Alias dla vet_number
+}
+
 const BullsPage: React.FC = () => {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialPage = parseInt(searchParams.get('page') || '1');
   const initialSearch = searchParams.get('search') || '';
+  const initialBullType = searchParams.get('bull_type') || '';
+  const initialBreed = searchParams.get('breed') || '';
   
-  const [searchConfig, setSearchConfig] = useState({ page: initialPage, search: initialSearch });
-  const [bulls, setBulls] = useState<Bull[]>([]);
+  // Pobierz organizationId z kontekstu użytkownika
+  const organizationId = user?.organizations?.[0]?.id;
+  
+  const [searchConfig, setSearchConfig] = useState({ 
+    page: initialPage, 
+    search: initialSearch,
+    bull_type: initialBullType,
+    breed: initialBreed
+  });
+  
+  const [bulls, setBulls] = useState<ExtendedBull[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [breeds, setBreeds] = useState<string[]>([]);
+  
   const navigate = useNavigate();
   
   const debouncedSearch = useDebounce(searchConfig.search, SEARCH_DEBOUNCE_TIME);
   
+  // Sprawdzenie czy użytkownik ma dostęp do organizacji
+  useEffect(() => {
+    if (!organizationId) {
+      setError('Brak dostępu do organizacji. Skontaktuj się z administratorem.');
+      setIsLoading(false);
+    }
+  }, [organizationId]);
+  
   // Funkcja pobierająca dane buhajów
-  const fetchBulls = useCallback(async (page: number, search = '') => {
+  const fetchBulls = useCallback(async () => {
+    if (!organizationId) {
+      setError('Brak dostępu do organizacji. Skontaktuj się z administratorem.');
+      setIsLoading(false);
+      return;
+    }
+    
     try {
       setIsLoading(true);
       setError(null);
       
+      const { page, search, bull_type, breed } = searchConfig;
       const trimmedSearch = search.trim();
       
       // Aktualizujemy parametry URL
       const newSearchParams = new URLSearchParams();
       newSearchParams.set('page', page.toString());
+      
       if (trimmedSearch.length >= MIN_SEARCH_LENGTH) {
         newSearchParams.set('search', trimmedSearch);
       }
-      setSearchParams(newSearchParams);
       
-      let params: any = { page, limit: ITEMS_PER_PAGE };
-      if (trimmedSearch.length >= MIN_SEARCH_LENGTH) {
-        params.search = trimmedSearch;
+      if (bull_type) {
+        newSearchParams.set('bull_type', bull_type);
       }
       
-      const response = await getBulls(params);
+      if (breed) {
+        newSearchParams.set('breed', breed);
+      }
+      
+      setSearchParams(newSearchParams);
+      
+      // Przygotowanie parametrów zapytania
+      const queryParams: Record<string, any> = {
+        page, 
+        limit: ITEMS_PER_PAGE,
+        sort_field: 'name',
+        sort_direction: 'asc' as 'asc' | 'desc',
+        organization_id: organizationId
+      };
+      
+      // Dodanie opcjonalnych parametrów wyszukiwania
+      if (trimmedSearch.length >= MIN_SEARCH_LENGTH) {
+        queryParams.search = trimmedSearch;
+      }
+      
+      if (bull_type) {
+        queryParams.bull_type = bull_type;
+      }
+      
+      if (breed) {
+        queryParams.breed = breed;
+      }
+      
+      // Wykonanie zapytania
+      const response = await getBulls(queryParams);
       
       const bullsList = response.data || [];
       const paginationInfo = response.pagination || {};
@@ -84,6 +154,18 @@ const BullsPage: React.FC = () => {
       setTotalPages(calculatedTotalPages > 0 ? calculatedTotalPages : 1);
       setTotalItems(totalCount);
       
+      // Zbieramy unikalne nazwy ras dla filtra
+      const uniqueBreeds = new Set<string>();
+      bullsList.forEach((bull: Bull) => {
+        if (bull.breed) {
+          uniqueBreeds.add(bull.breed);
+        }
+      });
+      
+      if (uniqueBreeds.size > 0) {
+        setBreeds(Array.from(uniqueBreeds));
+      }
+      
     } catch (error: any) {
       console.error('Error fetching bulls:', error);
       setError(error.response?.data?.message || 'Nie udało się pobrać listy buhajów');
@@ -91,7 +173,7 @@ const BullsPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [setSearchParams]);
+  }, [searchConfig, setSearchParams, organizationId]);
 
   // Obsługa zmiany strony
   const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
@@ -105,14 +187,41 @@ const BullsPage: React.FC = () => {
     setSearchConfig(prev => ({ ...prev, search: value, page: 1 }));
   };
   
-  // useEffect wywołujący fetchBulls, gdy zmieni się page lub debouncedSearch
+  // Obsługa zmiany typu buhaja
+  const handleBullTypeChange = (e: SelectChangeEvent<string>) => {
+    const value = e.target.value;
+    setSearchConfig(prev => ({ ...prev, bull_type: value, page: 1 }));
+  };
+  
+  // Obsługa zmiany rasy
+  const handleBreedChange = (e: SelectChangeEvent<string>) => {
+    const value = e.target.value;
+    setSearchConfig(prev => ({ ...prev, breed: value, page: 1 }));
+  };
+  
+  // useEffect wywołujący fetchBulls po zmianie parametrów wyszukiwania
   useEffect(() => {
-    fetchBulls(searchConfig.page, debouncedSearch);
-  }, [searchConfig.page, debouncedSearch, fetchBulls]);
+    fetchBulls();
+  }, [searchConfig.page, debouncedSearch, searchConfig.bull_type, searchConfig.breed, fetchBulls]);
 
   const navigateToBullDetails = (id: number) => {
-    // Zaktualizowana ścieżka nawigacji
     navigate(`/insemination/bulls/${id}`);
+  };
+
+  // Funkcja renderująca tłumaczenie typu buhaja
+  const renderBullType = (type: string | undefined) => {
+    if (!type) return '-';
+    
+    switch (type) {
+      case 'dairy':
+        return <Chip label="Mleczny" color="primary" size="small" variant="outlined" />;
+      case 'beef':
+        return <Chip label="Mięsny" color="secondary" size="small" variant="outlined" />;
+      case 'dual':
+        return <Chip label="Dwukierunkowy" color="info" size="small" variant="outlined" />;
+      default:
+        return <Chip label={type} size="small" variant="outlined" />;
+    }
   };
 
   const cardActions = (
@@ -159,20 +268,58 @@ const BullsPage: React.FC = () => {
   return (
     <div className="bulls-list">
       <Card title="Lista buhajów" actions={cardActions}>
-        <div className="card-actions">
-          <div className="search-container">
-            <TextField
-              className="search-input"
-              placeholder={`Szukaj buhajów (min. ${MIN_SEARCH_LENGTH} znaki)...`}
-              variant="outlined"
-              size="small"
-              fullWidth
-              value={searchConfig.search}
-              onChange={handleSearch}
-            />
-            <FaSearch className="search-icon" />
-          </div>
-        </div>
+        <Grid container spacing={2} alignItems="center" sx={{ mb: 3 }}>
+          <Grid item xs={12} md={6}>
+            <div className="search-container">
+              <TextField
+                className="search-input"
+                placeholder={`Szukaj buhajów (min. ${MIN_SEARCH_LENGTH} znaki)...`}
+                variant="outlined"
+                size="small"
+                fullWidth
+                value={searchConfig.search}
+                onChange={handleSearch}
+                InputProps={{
+                  startAdornment: <FaSearch className="search-icon" style={{ marginRight: 8 }} />
+                }}
+              />
+            </div>
+          </Grid>
+          <Grid item xs={6} md={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel id="bull-type-label">Typ buhaja</InputLabel>
+              <Select
+                labelId="bull-type-label"
+                id="bull-type-select"
+                value={searchConfig.bull_type}
+                onChange={handleBullTypeChange}
+                label="Typ buhaja"
+              >
+                <MenuItem value="">Wszystkie</MenuItem>
+                <MenuItem value="dairy">Mleczne</MenuItem>
+                <MenuItem value="beef">Mięsne</MenuItem>
+                <MenuItem value="dual">Dwukierunkowe</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={6} md={3}>
+            <FormControl fullWidth size="small">
+              <InputLabel id="breed-label">Rasa</InputLabel>
+              <Select
+                labelId="breed-label"
+                id="breed-select"
+                value={searchConfig.breed}
+                onChange={handleBreedChange}
+                label="Rasa"
+              >
+                <MenuItem value="">Wszystkie</MenuItem>
+                {breeds.map((breed) => (
+                  <MenuItem key={breed} value={breed}>{breed}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
         
         {error && <Alert severity="error">{error}</Alert>}
         
@@ -185,8 +332,8 @@ const BullsPage: React.FC = () => {
           <div className="table-container">
             {bulls.length === 0 ? (
               <div className="empty-message">
-                {searchConfig.search.trim().length >= MIN_SEARCH_LENGTH ? 
-                  `Nie znaleziono buhajów dla "${searchConfig.search.trim()}"` : 
+                {searchConfig.search.trim().length >= MIN_SEARCH_LENGTH || searchConfig.bull_type || searchConfig.breed ? 
+                  'Nie znaleziono buhajów spełniających kryteria wyszukiwania' : 
                   'Nie znaleziono buhajów'}
               </div>
             ) : (
@@ -197,7 +344,7 @@ const BullsPage: React.FC = () => {
                   <Table className="data-table">
                     <TableHead>
                       <TableRow>
-                        <TableCell sx={{ width: '25%' }}>Nazwa/Identyfikator</TableCell>
+                        <TableCell sx={{ width: '25%' }}>Nazwa</TableCell>
                         <TableCell sx={{ width: '20%' }}>Nr identyfikacyjny</TableCell>
                         <TableCell sx={{ width: '15%' }}>Rasa</TableCell>
                         <TableCell sx={{ width: '20%' }}>Typ buhaja</TableCell>
@@ -213,22 +360,11 @@ const BullsPage: React.FC = () => {
                           hover
                           className="clickable-row"
                         >
-                          <TableCell>{bull.identification_number}</TableCell>
+                          <TableCell>{bull.name || bull.identification_number}</TableCell>
                           <TableCell>{bull.identification_number}</TableCell>
                           <TableCell>{bull.breed || '-'}</TableCell>
-                          <TableCell>
-                            {bull.bull_type && (
-                              <Chip 
-                                label={bull.bull_type === 'dairy' ? 'Mleczny' : 
-                                       bull.bull_type === 'beef' ? 'Mięsny' : 
-                                       bull.bull_type === 'dual' ? 'Dwukierunkowy' : bull.bull_type} 
-                                color={bull.bull_type === 'dairy' ? 'primary' : 'default'} 
-                                size="small" 
-                                variant="outlined" 
-                              />
-                            )}
-                          </TableCell>
-                          <TableCell>{bull.vet_number || '-'}</TableCell>
+                          <TableCell>{renderBullType(bull.bull_type)}</TableCell>
+                          <TableCell>{bull.veterinary_number || bull.vet_number || '-'}</TableCell>
                           <TableCell align="center" onClick={(e) => e.stopPropagation()}>
                             <div className="action-buttons">
                               <Button 
@@ -246,7 +382,6 @@ const BullsPage: React.FC = () => {
                                 tooltip="Edytuj"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  // Zaktualizowana ścieżka nawigacji
                                   navigate(`/insemination/bulls/${bull.id}/edit`);
                                 }}
                               />

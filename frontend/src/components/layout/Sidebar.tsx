@@ -12,6 +12,7 @@ import {
   FaChevronDown,
   FaChevronUp,
   FaPlus,
+  FaCog, // Dodana ikona koła zębatego dla ustawień
 } from 'react-icons/fa';
 import './Sidebar.css';
 
@@ -127,6 +128,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onLinkClick }) => {
         { title: 'Rejestr unasienniania', path: '/insemination/inseminations' },
         { title: 'Buhaje', path: '/insemination/bulls' },
         { title: 'Magazyn', path: '/insemination/deliveries' },
+        { title: 'Ustawienia', path: '/insemination/settings' }, // Nowa pozycja
       ],
     },
     {
@@ -153,9 +155,15 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onLinkClick }) => {
     }
   };
 
+  // Funkcja do nawigacji do dashboardu po kliknięciu w logo lub tytuł
+  const navigateToDashboard = () => {
+    navigate('/dashboard');
+    handleLinkClick();
+  };
+
   return (
     <div ref={sidebarRef} className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
-      <div className="sidebar-header">
+      <div className="sidebar-header" onClick={navigateToDashboard} style={{ cursor: 'pointer' }}>
         <img src="/images/logo.svg" alt="Logo" className="sidebar-logo" />
         {isOpen && <span className="sidebar-title">vetcloud.pl</span>}
       </div>

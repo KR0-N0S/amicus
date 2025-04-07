@@ -140,22 +140,68 @@ export interface Animal {
   organization_id?: number;
 }
 
+// Istniejące interfejsy pozostają niezmienione - dodajemy nowe
+
+export interface SemenProvider {
+  id: number;
+  owner_id?: number;
+  name: string;
+  vet_id_number: string;
+  address_street?: string;
+  address_city?: string;
+  address_postal_code?: string;
+  address_province?: string;
+  address_country?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  organization_id?: number | null; // Dodane pole organization_id
+  is_public?: boolean; // Dodana flaga is_public
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SemenDelivery {
+  delivery_id: number;
+  provider_id: number;
+  owner_id?: number;
+  delivery_date: string;
+  invoice_number?: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+  provider?: SemenProvider;
+  items?: SemenDeliveryItem[];
+}
+
+export interface SemenDeliveryItem {
+  item_id: number;
+  delivery_id: number;
+  bull_id: number;
+  straw_count: number;
+  straw_price?: number;
+  batch_number?: string;
+  production_date?: string;
+  expiration_date?: string;
+  notes?: string;
+  bull?: Bull;
+}
+
+// Uzupełnienie interfejsu Bull o pola inventory
 export interface Bull {
   id: number;
   identification_number: string;
   vet_number?: string;
   breed?: string;
-  semen_production_date?: string;
+  bull_type: string;
   supplier?: string;
-  bull_type?: string;
-  last_delivery_date?: string;
+  semen_production_date?: string;
   straws_last_delivery?: number;
   current_straw_count?: number;
   suggested_price?: number;
   additional_info?: string;
-  favorite: boolean;
-  created_at: string;
-  vet_id?: number;
+  last_delivery_date?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Insemination {

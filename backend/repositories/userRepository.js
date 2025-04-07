@@ -166,7 +166,7 @@ async function getClientsInOrganization(organizationId, excludedRoles = ['Owner'
 
 // Pobranie jednego użytkownika (dla Client i Farmer)
 async function getSingleUser(userId, withDetails = true) {
-  let sqlQuery; // Zmieniono nazwę zmiennej z 'query' na 'sqlQuery'
+  let sqlQuery;
   
   if (withDetails) {
     sqlQuery = `
@@ -192,88 +192,201 @@ async function getSingleUser(userId, withDetails = true) {
       GROUP BY u.id
     `;
   } else {
-    sqlQuery = 'SELECT * FROM users WHERE id = $1'; // Zmieniono nazwę zmiennej z 'query' na 'sqlQuery'
+    sqlQuery = 'SELECT * FROM users WHERE id = $1';
   }
   
-  const result = await query(sqlQuery, [userId]); // Zmieniono nazwę zmiennej z 'query' na 'sqlQuery'
+  const result = await query(sqlQuery, [userId]);
   return result.rows[0];
 }
 
-// Funkcja wyszukiwania użytkowników 
-async function searchUsers(searchQuery, roles, organizationId) {
-  console.log(`[USER_REPO] Wyszukiwanie użytkowników: query=${searchQuery}, roles=${roles}, organizationId=${organizationId}`);
-  
-  // Budowanie zapytania SQL
-  let sqlQuery = `
-    SELECT u.*, 
-            array_agg(DISTINCT jsonb_build_object(
-              'id', o.id,
-              'name', o.name,
-              'city', o.city,
-              'street', o.street,
-              'house_number', o.house_number,
-              'role', ou.role
-            )) FILTER (WHERE o.id IS NOT NULL) as organizations,
-            array_agg(DISTINCT jsonb_build_object(
-              'id', h.id,
-              'herd_id', h.herd_id,
-              'eval_herd_no', h.eval_herd_no
-            )) FILTER (WHERE h.id IS NOT NULL) as herds
-     FROM users u
-     JOIN organization_user ou ON u.id = ou.user_id
-     LEFT JOIN organizations o ON ou.organization_id = o.id 
-     LEFT JOIN herds h ON h.owner_id = u.id
-     WHERE ou.organization_id = $1
-  `;
-  
-  const params = [organizationId];
-  let paramIndex = 2;
-  
-  // Filtrowanie po rolach
-  if (roles && roles.length > 0) {
-    // Konwersja na tablicę jeśli to string
-    const roleArray = typeof roles === 'string' ? roles.split(',') : roles;
-    if (roleArray.length > 0) {
-      const rolePlaceholders = roleArray.map((_, idx) => `$${paramIndex + idx}`).join(', ');
-      sqlQuery += ` AND ou.role IN (${rolePlaceholders})`;
-      params.push(...roleArray);
-      paramIndex += roleArray.length;
-    }
+// Cache dla rozszerzeń PostgreSQL
+const _extensionCache = {};
+const _extensionCacheDuration = 3600000; // 1 godzina w ms
+
+/**
+ * Sprawdza czy rozszerzenie PostgreSQL jest dostępne
+ * @private
+ */
+async function _checkExtension(extensionName) {
+  const now = Date.now();
+  if (_extensionCache[extensionName] && now < _extensionCache[extensionName].expires) {
+    return _extensionCache[extensionName].value;
   }
   
-  // Filtrowanie po frazie wyszukiwania
-  if (searchQuery && searchQuery.trim() !== '') {
-    sqlQuery += ` 
-      AND (
-        u.first_name ILIKE $${paramIndex} 
-        OR u.last_name ILIKE $${paramIndex} 
-        OR u.email ILIKE $${paramIndex}
-        OR CONCAT(u.first_name, ' ', u.last_name) ILIKE $${paramIndex}
-        OR u.street ILIKE $${paramIndex}
-        OR u.house_number ILIKE $${paramIndex}
-        OR u.city ILIKE $${paramIndex}
-        OR u.postal_code ILIKE $${paramIndex}
-        OR u.tax_id ILIKE $${paramIndex}
-        OR u.phone ILIKE $${paramIndex}
-      )
-    `;
-    params.push(`%${searchQuery.trim()}%`);
+  try {
+    const result = await query(
+      "SELECT 1 FROM pg_extension WHERE extname = $1",
+      [extensionName]
+    );
+    const available = result?.rows?.length > 0;
+    _extensionCache[extensionName] = { value: available, expires: now + _extensionCacheDuration };
+    
+    console.log(`[USER_REPO] Rozszerzenie ${extensionName} dostępne: ${available}`);
+    return available;
+  } catch (error) {
+    console.error(`[USER_REPO] Błąd przy sprawdzaniu rozszerzenia ${extensionName}:`, error);
+    _extensionCache[extensionName] = { value: false, expires: now + _extensionCacheDuration };
+    return false;
   }
-  
-  // Grupowanie i sortowanie
-  sqlQuery += ` 
-    GROUP BY u.id
-    ORDER BY u.last_name, u.first_name
-  `;
-  
-  console.log(`[USER_REPO] SQL Query: ${sqlQuery}`);
-  console.log(`[USER_REPO] Params:`, params);
-  
-  const result = await query(sqlQuery, params);
-  return result.rows;
 }
 
-// Dostarczamy obydwie wersje nazw metod dla kompatybilności
+/**
+ * Funkcja wyszukiwania użytkowników z obsługą literówek i paginacją
+ * Kompletnie przepisana, aby rozwiązać problem z parametrami
+ */
+async function searchUsers(searchQuery, roles, organizationId, limit = 20, offset = 0) {
+  console.log(`[USER_REPO] Wyszukiwanie użytkowników: query=${searchQuery}, roles=${roles}, organizationId=${organizationId}, limit=${limit}, offset=${offset}`);
+  
+  try {
+    // Sprawdzamy czy dostępne są rozszerzenia PostgreSQL, które ułatwią wyszukiwanie
+    const hasTrgm = await _checkExtension('pg_trgm');
+    const hasUnaccent = await _checkExtension('unaccent');
+    
+    // Rozpoczynamy budowę zapytania bazowego
+    let sqlQuery = `
+      SELECT u.*, 
+              array_agg(DISTINCT jsonb_build_object(
+                'id', o.id,
+                'name', o.name,
+                'city', o.city,
+                'street', o.street,
+                'house_number', o.house_number,
+                'role', ou.role
+              )) FILTER (WHERE o.id IS NOT NULL) as organizations,
+              array_agg(DISTINCT jsonb_build_object(
+                'id', h.id,
+                'herd_id', h.herd_id,
+                'eval_herd_no', h.eval_herd_no
+              )) FILTER (WHERE h.id IS NOT NULL) as herds
+      FROM users u
+      JOIN organization_user ou ON u.id = ou.user_id
+      LEFT JOIN organizations o ON ou.organization_id = o.id 
+      LEFT JOIN herds h ON h.owner_id = u.id
+      WHERE ou.organization_id = $1
+    `;
+    
+    // Parametry zapytania zaczynamy od organizationId
+    const params = [organizationId];
+    let paramIndex = 2; // Następny indeks parametru
+    
+    // Filtrowanie po rolach jeśli określone
+    if (roles && Array.isArray(roles) && roles.length > 0) {
+      const roleParams = roles.map((_, idx) => `$${paramIndex + idx}`).join(', ');
+      sqlQuery += ` AND ou.role IN (${roleParams})`;
+      params.push(...roles);
+      paramIndex += roles.length;
+    } else if (roles && typeof roles === 'string' && roles.trim()) {
+      const roleArray = roles.split(',').map(r => r.trim()).filter(r => r);
+      if (roleArray.length > 0) {
+        const roleParams = roleArray.map((_, idx) => `$${paramIndex + idx}`).join(', ');
+        sqlQuery += ` AND ou.role IN (${roleParams})`;
+        params.push(...roleArray);
+        paramIndex += roleArray.length;
+      }
+    }
+    
+    // Filtrowanie po frazie wyszukiwania
+    if (searchQuery && typeof searchQuery === 'string' && searchQuery.trim()) {
+      // Dzielimy frazę na osobne słowa do wyszukania
+      const terms = searchQuery.trim().toLowerCase().split(/\s+/).filter(term => term.length >= 2);
+      
+      if (terms.length > 0) {
+        // Definiujemy pola, w których będziemy szukać
+        const fields = [
+          "u.first_name",
+          "u.last_name", 
+          "u.email",
+          "CONCAT(u.first_name, ' ', u.last_name)",
+          "u.city", 
+          "u.street",
+          "u.house_number", 
+          "u.postal_code",
+          "u.tax_id", 
+          "u.phone"
+        ];
+        
+        // Budujemy warunki dla każdego termu
+        const searchConditions = [];
+        
+        for (const term of terms) {
+          const termConditions = [];
+          
+          // Dla każdego pola budujemy warunek bazowy (ILIKE)
+          for (const field of fields) {
+            // Używamy unaccent jeśli dostępne
+            const fieldExpr = hasUnaccent 
+              ? `unaccent(lower(COALESCE(${field},'')))`
+              : `lower(COALESCE(${field},''))`;
+            
+            const searchParam = `%${term}%`;
+            params.push(searchParam);
+            termConditions.push(`${fieldExpr} ILIKE $${paramIndex}`);
+            paramIndex++;
+          }
+          
+          // Jeśli mamy dostępne pg_trgm i term ma minimum 3 znaki, dodajemy warunki podobieństwa
+          if (hasTrgm && term.length >= 3) {
+            for (const field of fields) {
+              const fieldExpr = hasUnaccent 
+                ? `unaccent(lower(COALESCE(${field},'')))`
+                : `lower(COALESCE(${field},''))`;
+              
+              // Dodajemy warunek podobieństwa
+              params.push(term);
+              termConditions.push(`similarity(${fieldExpr}, $${paramIndex}) > 0.3`);
+              paramIndex++;
+            }
+          }
+          
+          // Łączymy warunki dla tego termu z OR
+          if (termConditions.length > 0) {
+            searchConditions.push(`(${termConditions.join(' OR ')})`);
+          }
+        }
+        
+        // Łączymy warunki dla wszystkich termów z AND
+        if (searchConditions.length > 0) {
+          sqlQuery += ` AND (${searchConditions.join(' AND ')})`;
+        }
+      }
+    }
+    
+    // Dodanie zapytania zliczającego dla paginacji
+    const countQuery = sqlQuery.replace(/SELECT u\.\*.*FROM/s, 'SELECT COUNT(DISTINCT u.id) AS total FROM');
+    const countResult = await query(countQuery, params);
+    const totalCount = parseInt(countResult.rows[0]?.total || '0');
+    
+    // Dodanie sortowania i paginacji
+    sqlQuery += `
+      GROUP BY u.id
+      ORDER BY u.last_name, u.first_name
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+    params.push(limit, offset);
+    
+    // Logowanie zapytania (tylko początek dla czytelności)
+    console.log(`[USER_REPO] SQL Query:`, sqlQuery.substring(0, 200) + "...");
+    console.log(`[USER_REPO] Params:`, params);
+    
+    // Wykonanie zapytania
+    const result = await query(sqlQuery, params);
+    
+    return {
+      users: result.rows,
+      pagination: {
+        total: totalCount,
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        pages: Math.ceil(totalCount / parseInt(limit))
+      }
+    };
+  } catch (error) {
+    console.error(`[USER_REPO] Błąd podczas wyszukiwania użytkowników:`, error);
+    throw error; // Przepuszczamy błąd dalej, aby controller mógł go obsłużyć
+  }
+}
+
+// Dostarczamy metody dla API
 module.exports = {
   getUserById: findById,
   getUserByEmail: findByEmail,
@@ -287,5 +400,5 @@ module.exports = {
   getClientsInOrganization,
   getSingleUser,
   deactivateUser,
-  searchUsers // Dodajemy nową funkcję do eksportu
+  searchUsers
 };

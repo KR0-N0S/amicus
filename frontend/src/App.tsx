@@ -37,6 +37,7 @@ import InseminationsPage from './pages/insemination/InseminationsPage';
 import InseminationDetailPage from './pages/insemination/InseminationDetailPage';
 import InseminationFormPage from './pages/insemination/InseminationFormPage';
 import WarehousesPage from './pages/insemination/WarehousesPage';
+import SettingsPage from './pages/insemination/SettingsPage'; // Nowy import
 
 // Styles
 import './assets/css/main.css';
@@ -89,6 +90,9 @@ const App: React.FC = () => {
               <Route path="/insemination/registers/:id/edit" element={<InseminationFormPage />} />
               
               <Route path="/insemination/warehouses" element={<WarehousesPage />} />
+              
+              {/* Nowa trasa dla ustawień inseminacji */}
+              <Route path="/insemination/settings" element={<SettingsPage />} />
               
               <Route path="/profile" element={<Profile />} />
               <Route path="/settings" element={<Settings />} />

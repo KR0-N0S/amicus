@@ -12,8 +12,11 @@ dotenv.config();
 // Import tras
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
-const moduleRoutes = require('./routes/moduleRoutes'); // Dodane - import tras dla modułów
-const actionButtonRoutes = require('./routes/actionButtonRoutes'); // Dodane - import tras dla przycisków akcji
+const moduleRoutes = require('./routes/moduleRoutes'); // Import tras dla modułów
+const actionButtonRoutes = require('./routes/actionButtonRoutes'); // Import tras dla przycisków akcji
+const bullRoutes = require('./routes/bullRoutes'); // Import tras dla buhajów
+const animalRoutes = require('./routes/animalRoutes'); // Import tras dla zwierząt
+const semenProviderRoutes = require('./routes/semenProviderRoutes');
 
 // Import middleware
 const { verifyResourceAccess } = require('./middleware/resourceAccessMiddleware');
@@ -121,9 +124,10 @@ app.use(defaultLimiter);
 // Trasy API
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api', moduleRoutes); // Dodane - trasy dla modułów (wszystkie zaczynają się od /api)
-app.use('/api/action-buttons', actionButtonRoutes); // Dodane - trasy dla przycisków akcji
-// Pozostałe trasy można dodać później
+app.use('/api/bulls', bullRoutes); // Trasy dla buhajów
+app.use('/api/animals', animalRoutes); // Trasy dla zwierząt (zakładam, że istnieją)
+app.use('/api', moduleRoutes); // Trasy dla modułów (wszystkie zaczynają się od /api)
+app.use('/api/action-buttons', actionButtonRoutes); // Trasy dla przycisków akcji
 
 // Dokumentacja Swagger
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));

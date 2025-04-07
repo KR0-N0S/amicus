@@ -3,7 +3,7 @@ const userController = require('../controllers/userController');
 const clientController = require('../controllers/clientController');
 const { verifyToken } = require('../middleware/authMiddleware');
 const { requireOrganizationMembership } = require('../middleware/roleMiddleware');
-const { verifyResourceAccess } = require('../middleware/resourceAccessMiddleware'); // Dodane
+const { verifyResourceAccess } = require('../middleware/resourceAccessMiddleware');
 
 const router = express.Router();
 
@@ -17,7 +17,7 @@ router.use(verifyToken);
 router.get('/profile', userController.getProfile);
 router.put('/profile', userController.updateProfile);
 router.post('/change-password', userController.changePassword);
-router.get('/search', userController.searchUsers); // Nowy endpoint do wyszukiwania użytkowników
+router.get('/search', clientController.searchClients); // Zmienione na nową metodę w clientController
 
 // Pobieranie listy klientów - bez zmian, nie wymaga weryfikacji dostępu do konkretnego zasobu
 router.get('/clients', clientController.getClients);
