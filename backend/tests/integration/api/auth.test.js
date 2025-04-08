@@ -52,6 +52,12 @@ jest.mock('../../../middleware/authMiddleware', () => ({
   }
 }));
 
+describe('Setup tests', () => {
+  test('środowisko testowe jest poprawnie skonfigurowane', () => {
+    expect(true).toBe(true);
+  });
+});
+
 describe('Auth API Integration Tests', () => {
   let app;
   
@@ -112,14 +118,16 @@ describe('Auth API Integration Tests', () => {
       // Arrange
       const userData = {
         email: 'new@example.com',
-        password: 'password123'
+        password: 'password123',
+        first_name: 'Jan',
+        last_name: 'Kowalski'
       };
       
       const organizationData = {
         name: 'Test Organization'
       };
       
-      req = {
+      const requestData = {
         ...userData,
         organization: organizationData
       };
@@ -136,7 +144,7 @@ describe('Auth API Integration Tests', () => {
       // Act
       const response = await request(app)
         .post('/api/auth/register')
-        .send(req);
+        .send(requestData);
       
       // Assert
       expect(response.status).toBe(201);

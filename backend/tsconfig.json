@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "es2018",
+    "module": "commonjs",
+    "outDir": "./dist",
+    "rootDir": "./",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "sourceMap": true,
+    "moduleResolution": "node",
+    "allowJs": true,                   /* Pozwala na kompilację plików JS */
+    "checkJs": false,                  /* Nie sprawdza typów w plikach JS */
+    "noImplicitAny": false,            /* Pozwala na 'any' dla stopniowej migracji */
+    "typeRoots": [
+      "./node_modules/@types",         /* Standardowe typy */
+      "./types"                        /* Własne typy */
+    ]
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.js",                         /* Uwzględnienie plików JS */
+    "types/**/*.d.ts"                  /* Pliki deklaracji typów */
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "tests/**/*",
+    "coverage/**/*"                    /* Wykluczenie katalogu coverage */
+  ]
+}
