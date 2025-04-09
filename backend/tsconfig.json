@@ -12,23 +12,23 @@
     "declaration": true,
     "sourceMap": true,
     "moduleResolution": "node",
-    "allowJs": true,                   /* Pozwala na kompilację plików JS */
-    "checkJs": false,                  /* Nie sprawdza typów w plikach JS */
-    "noImplicitAny": false,            /* Pozwala na 'any' dla stopniowej migracji */
+    "allowJs": true,
+    "checkJs": false,
+    "noImplicitAny": false,
     "typeRoots": [
-      "./node_modules/@types",         /* Standardowe typy */
-      "./types"                        /* Własne typy */
-    ]
+      "./node_modules/@types",
+      "./types"
+    ],
+    "types": ["node", "jest"]
   },
   "include": [
     "**/*.ts",
-    "**/*.js",                         /* Uwzględnienie plików JS */
-    "types/**/*.d.ts"                  /* Pliki deklaracji typów */
+    "**/*.js",
+    "types/**/*.d.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
-    "tests/**/*",
-    "coverage/**/*"                    /* Wykluczenie katalogu coverage */
+    "coverage/**/*"
   ]
 }

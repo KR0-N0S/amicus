@@ -1,12 +1,33 @@
-const authController = require('../../../controllers/authController');
-const authService = require('../../../services/authService');
-const { AppError } = require('../../../middleware/errorHandler');
+import * as authController from '../../../controllers/authController';
+import * as authService from '../../../services/authService';
+import { AppError } from '../../../middleware/errorHandler';
+import { Response, NextFunction } from 'express';
+import { RequestWithUser } from '../../../types/express'; // Importujemy istniejący typ
+
+// Interfejs dla mocka Response
+interface MockResponse extends Partial<Response> {
+  status: jest.Mock;
+  json: jest.Mock;
+  cookie: jest.Mock;
+  clearCookie: jest.Mock;
+}
+
+// Interfejs dla mockowanych metod serwisu
+interface AuthServiceMethods {
+  register: jest.Mock;
+  login: jest.Mock;
+  getUserProfile: jest.Mock;
+  refreshAccessToken: jest.Mock;
+}
 
 // Mockowanie serwisu autentykacji
 jest.mock('../../../services/authService');
+const mockedAuthService = authService as unknown as AuthServiceMethods;
 
 describe('AuthController', () => {
-  let req, res, next;
+  let req: Partial<RequestWithUser>;
+  let res: MockResponse;
+  let next: jest.Mock<ReturnType<NextFunction>>;
 
   beforeEach(() => {
     // Resetowanie mocków
@@ -16,7 +37,7 @@ describe('AuthController', () => {
     req = {
       body: {},
       userId: 1,
-      cookies: {}
+      cookies: {} // Zawsze definiujemy cookies jako obiekt
     };
 
     res = {
@@ -56,13 +77,13 @@ describe('AuthController', () => {
         refreshToken: 'test-refresh-token'
       };
 
-      authService.register.mockResolvedValue(mockServiceResult);
+      mockedAuthService.register = jest.fn().mockResolvedValue(mockServiceResult);
 
       // Act
-      await authController.register(req, res, next);
+      await authController.register(req as RequestWithUser, res as Response, next);
 
       // Assert
-      expect(authService.register).toHaveBeenCalledWith(
+      expect(mockedAuthService.register).toHaveBeenCalledWith(
         expect.objectContaining(userData),
         organization,
         null,
@@ -100,10 +121,10 @@ describe('AuthController', () => {
         refreshToken: 'test-refresh-token'
       };
 
-      authService.register.mockResolvedValue(mockServiceResult);
+      mockedAuthService.register = jest.fn().mockResolvedValue(mockServiceResult);
 
       // Act
-      await authController.register(req, res, next);
+      await authController.register(req as RequestWithUser, res as Response, next);
 
       // Assert
       expect(res.cookie).not.toHaveBeenCalled();
@@ -125,10 +146,10 @@ describe('AuthController', () => {
       };
 
       const error = new Error('Użytkownik o takim adresie email już istnieje');
-      authService.register.mockRejectedValue(error);
+      mockedAuthService.register = jest.fn().mockRejectedValue(error);
 
       // Act
-      await authController.register(req, res, next);
+      await authController.register(req as RequestWithUser, res as Response, next);
 
       // Assert
       expect(next).toHaveBeenCalledWith(error);
@@ -154,13 +175,13 @@ describe('AuthController', () => {
         refreshToken: 'test-refresh-token'
       };
 
-      authService.login.mockResolvedValue(mockServiceResult);
+      mockedAuthService.login = jest.fn().mockResolvedValue(mockServiceResult);
 
       // Act
-      await authController.login(req, res, next);
+      await authController.login(req as RequestWithUser, res as Response, next);
 
       // Assert
-      expect(authService.login).toHaveBeenCalledWith(credentials.email, credentials.password);
+      expect(mockedAuthService.login).toHaveBeenCalledWith(credentials.email, credentials.password);
       expect(res.cookie).toHaveBeenCalledWith('refreshToken', 'test-refresh-token', expect.any(Object));
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
@@ -178,13 +199,13 @@ describe('AuthController', () => {
       req.body = { email: 'test@example.com' }; // brak hasła
 
       // Act
-      await authController.login(req, res, next);
+      await authController.login(req as RequestWithUser, res as Response, next);
 
       // Assert
       expect(next).toHaveBeenCalled();
       expect(next.mock.calls[0][0]).toBeInstanceOf(AppError);
       expect(next.mock.calls[0][0].statusCode).toBe(400);
-      expect(authService.login).not.toHaveBeenCalled();
+      expect(mockedAuthService.login).not.toHaveBeenCalled();
     });
 
     test('zwraca błąd 401 gdy dane logowania są niepoprawne', async () => {
@@ -194,10 +215,10 @@ describe('AuthController', () => {
         password: 'wrongPassword'
       };
 
-      authService.login.mockRejectedValue(new Error('Nieprawidłowe dane logowania'));
+      mockedAuthService.login = jest.fn().mockRejectedValue(new Error('Nieprawidłowe dane logowania'));
 
       // Act
-      await authController.login(req, res, next);
+      await authController.login(req as RequestWithUser, res as Response, next);
 
       // Assert
       expect(next).toHaveBeenCalled();
@@ -216,13 +237,13 @@ describe('AuthController', () => {
         organizations: [{ id: 5, name: 'Test Org', role: 'admin' }]
       };
 
-      authService.getUserProfile.mockResolvedValue(mockProfileResult);
+      mockedAuthService.getUserProfile = jest.fn().mockResolvedValue(mockProfileResult);
 
       // Act
-      await authController.getMe(req, res, next);
+      await authController.getMe(req as RequestWithUser, res as Response, next);
 
       // Assert
-      expect(authService.getUserProfile).toHaveBeenCalledWith(1);
+      expect(mockedAuthService.getUserProfile).toHaveBeenCalledWith(1);
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
         status: 'success',
@@ -237,10 +258,10 @@ describe('AuthController', () => {
       // Arrange
       req.userId = 999;
       const error = new Error('Użytkownik nie znaleziony');
-      authService.getUserProfile.mockRejectedValue(error);
+      mockedAuthService.getUserProfile = jest.fn().mockRejectedValue(error);
 
       // Act
-      await authController.getMe(req, res, next);
+      await authController.getMe(req as RequestWithUser, res as Response, next);
 
       // Assert
       expect(next).toHaveBeenCalledWith(error);
@@ -250,20 +271,22 @@ describe('AuthController', () => {
   describe('refreshToken', () => {
     test('odświeża token i zwraca nowy access token', async () => {
       // Arrange
-      req.cookies.refreshToken = 'valid-refresh-token';
+      if (req.cookies) { // Bezpieczne sprawdzenie czy cookies istnieją
+        req.cookies.refreshToken = 'valid-refresh-token';
+      }
 
       const mockTokens = {
         accessToken: 'new-access-token',
         refreshToken: 'new-refresh-token'
       };
 
-      authService.refreshAccessToken.mockResolvedValue(mockTokens);
+      mockedAuthService.refreshAccessToken = jest.fn().mockResolvedValue(mockTokens);
 
       // Act
-      await authController.refreshToken(req, res, next);
+      await authController.refreshToken(req as RequestWithUser, res as Response, next);
 
       // Assert
-      expect(authService.refreshAccessToken).toHaveBeenCalledWith('valid-refresh-token');
+      expect(mockedAuthService.refreshAccessToken).toHaveBeenCalledWith('valid-refresh-token');
       expect(res.cookie).toHaveBeenCalledWith('refreshToken', 'new-refresh-token', expect.any(Object));
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith({
@@ -276,25 +299,29 @@ describe('AuthController', () => {
 
     test('zwraca błąd 401 gdy brak refresh tokenu', async () => {
       // Arrange
-      req.cookies.refreshToken = undefined;
+      if (req.cookies) {
+        req.cookies.refreshToken = undefined;
+      }
 
       // Act
-      await authController.refreshToken(req, res, next);
+      await authController.refreshToken(req as RequestWithUser, res as Response, next);
 
       // Assert
       expect(next).toHaveBeenCalled();
       expect(next.mock.calls[0][0]).toBeInstanceOf(AppError);
       expect(next.mock.calls[0][0].statusCode).toBe(401);
-      expect(authService.refreshAccessToken).not.toHaveBeenCalled();
+      expect(mockedAuthService.refreshAccessToken).not.toHaveBeenCalled();
     });
 
     test('usuwa cookie i zwraca błąd 401 gdy refresh token jest nieprawidłowy', async () => {
       // Arrange
-      req.cookies.refreshToken = 'invalid-refresh-token';
-      authService.refreshAccessToken.mockRejectedValue(new Error('Nieprawidłowy refresh token'));
+      if (req.cookies) {
+        req.cookies.refreshToken = 'invalid-refresh-token';
+      }
+      mockedAuthService.refreshAccessToken = jest.fn().mockRejectedValue(new Error('Nieprawidłowy refresh token'));
 
       // Act
-      await authController.refreshToken(req, res, next);
+      await authController.refreshToken(req as RequestWithUser, res as Response, next);
 
       // Assert
       expect(res.clearCookie).toHaveBeenCalledWith('refreshToken');
@@ -307,7 +334,7 @@ describe('AuthController', () => {
   describe('logout', () => {
     test('usuwa refresh token cookie i zwraca potwierdzenie wylogowania', async () => {
       // Act
-      await authController.logout(req, res, next);
+      await authController.logout(req as RequestWithUser, res as Response, next);
 
       // Assert
       expect(res.clearCookie).toHaveBeenCalledWith('refreshToken');

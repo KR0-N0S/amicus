@@ -1,7 +1,7 @@
 /**
  * Middleware do weryfikacji dostępu do zasobów na podstawie przynależności organizacyjnej
- * @author KR0-N0S
- * @date 2025-04-07 (zaktualizowano)
+ * @author KR0-N0S1
+ * @date 2025-04-08 18:26:57
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -31,7 +31,8 @@ export const verifyResourceAccess = (options: ResourceAccessOptions = { resource
       if (!req.userId || !req.user) {
         return res.status(401).json({
           status: 'error',
-          message: 'Wymagane uwierzytelnienie'
+          message: 'Wymagane uwierzytelnienie',
+          code: 'AUTHENTICATION_REQUIRED'
         });
       }
 
@@ -42,27 +43,43 @@ export const verifyResourceAccess = (options: ResourceAccessOptions = { resource
         return next(new AppError('Błąd konfiguracji middleware - brak typu zasobu', 500));
       }
 
-      // Pobierz organizationId z parametrów, query lub ciała żądania
+      // Pobierz organizationId - priorytetowo używamy już ustawionej wartości
       const orgParamName = options.orgParamName || 'organizationId';
-      const organizationId = req.params[orgParamName] || 
-                          req.query[orgParamName] || 
-                          req.body[orgParamName] ||
-                          (req.user.organizations && req.user.organizations.length > 0 ? req.user.organizations[0].id : undefined);
+      let organizationId = req.organizationId;
+      
+      // Jeśli nie ma ustawionego organizationId, próbujemy znaleźć w różnych miejscach
+      if (!organizationId) {
+        organizationId = req.params[orgParamName] || 
+                        req.query[orgParamName] || 
+                        req.body[orgParamName];
+      }
+      
+      // Jeśli nadal brak, sprawdzamy w organizacjach użytkownika
+      if (!organizationId && req.user.organizations && req.user.organizations.length > 0) {
+        organizationId = req.user.organizations[0].id;
+        console.log(`[RESOURCE_ACCESS_MIDDLEWARE] Automatycznie wybrano organizację ${organizationId} z kontekstu użytkownika`);
+      }
 
       if (!organizationId) {
         console.error('[RESOURCE_ACCESS_MIDDLEWARE] Brak ID organizacji w żądaniu');
         return res.status(400).json({
           status: 'error',
-          message: 'Wymagane ID organizacji'
+          message: 'Wymagane ID organizacji',
+          code: 'ORGANIZATION_ID_REQUIRED'
         });
       }
 
+      // Zapewniamy, że organizationId jest liczbą
+      const numericOrganizationId = Number(organizationId);
+      
       // Sprawdź czy użytkownik należy do tej organizacji
       let userBelongsToOrg = false;
       let userRoleInOrg: string | undefined = undefined;
 
       if (req.user.organizations) {
-        const userOrg = req.user.organizations.find((org: any) => org.id.toString() === organizationId.toString());
+        const userOrg = req.user.organizations.find((org: any) => 
+          Number(org.id) === numericOrganizationId
+        );
         if (userOrg) {
           userBelongsToOrg = true;
           userRoleInOrg = userOrg.role ? userOrg.role.toLowerCase() : undefined;
@@ -73,7 +90,8 @@ export const verifyResourceAccess = (options: ResourceAccessOptions = { resource
         console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Użytkownik ${req.userId} nie należy do organizacji ${organizationId}`);
         return res.status(403).json({
           status: 'error',
-          message: 'Brak dostępu do tej organizacji'
+          message: 'Brak dostępu do tej organizacji',
+          code: 'ORGANIZATION_ACCESS_DENIED'
         });
       }
 
@@ -83,6 +101,9 @@ export const verifyResourceAccess = (options: ResourceAccessOptions = { resource
 
       // Jeśli nie ma ID zasobu, przejdź dalej (może to być endpoint listowania)
       if (!resourceId) {
+        // Zapisujemy kontekst organizacji i roli w req
+        req.organizationId = numericOrganizationId;
+        req.userRoleInOrg = userRoleInOrg;
         return next();
       }
 
@@ -100,7 +121,7 @@ export const verifyResourceAccess = (options: ResourceAccessOptions = { resource
               SELECT ou.user_id, ou.organization_id, ou.role
               FROM organization_user ou
               WHERE ou.user_id = $1 AND ou.organization_id = $2
-            `, [resourceId, organizationId]);
+            `, [resourceId, numericOrganizationId]);
 
             // Jeśli użytkownik nie należy do organizacji
             if (userQuery.rows.length === 0) {
@@ -108,13 +129,18 @@ export const verifyResourceAccess = (options: ResourceAccessOptions = { resource
               if (userRoleInOrg === 'superadmin' && 
                   ['GET', 'POST', 'PUT', 'PATCH'].includes(req.method)) {
                 console.log(`[RESOURCE_ACCESS_MIDDLEWARE] Superadmin ${req.userId} uzyskuje dostęp do użytkownika ${resourceId} spoza organizacji`);
+                
+                // Zapisujemy kontekst organizacji i roli w req
+                req.organizationId = numericOrganizationId;
+                req.userRoleInOrg = userRoleInOrg;
                 return next();
               }
               
-              console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Użytkownik ${resourceId} nie należy do organizacji ${organizationId}`);
+              console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Użytkownik ${resourceId} nie należy do organizacji ${numericOrganizationId}`);
               return res.status(404).json({
                 status: 'error',
-                message: 'Żądany zasób nie istnieje lub nie masz do niego dostępu'
+                message: 'Żądany zasób nie istnieje lub nie masz do niego dostępu',
+                code: 'RESOURCE_NOT_FOUND'
               });
             }
             
@@ -127,7 +153,8 @@ export const verifyResourceAccess = (options: ResourceAccessOptions = { resource
                 console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Klient/farmer ${req.userId} próbuje uzyskać dostęp do innego użytkownika ${resourceId}`);
                 return res.status(403).json({
                   status: 'error',
-                  message: 'Brak uprawnień do wyświetlenia tego zasobu'
+                  message: 'Brak uprawnień do wyświetlenia tego zasobu',
+                  code: 'INSUFFICIENT_PERMISSIONS'
                 });
               }
             } else if (['employee', 'officestaff', 'inseminator', 'vettech', 'vet'].includes(userRoleInOrg || '')) {
@@ -136,13 +163,15 @@ export const verifyResourceAccess = (options: ResourceAccessOptions = { resource
                 console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Pracownik ${req.userId} próbuje uzyskać dostęp do innego pracownika ${resourceId}`);
                 return res.status(403).json({
                   status: 'error',
-                  message: 'Brak uprawnień do wyświetlenia tego zasobu'
+                  message: 'Brak uprawnień do wyświetlenia tego zasobu',
+                  code: 'INSUFFICIENT_PERMISSIONS'
                 });
               }
             }
-            // Owner może widzieć tylko użytkowników w swojej organizacji (co już sprawdziliśmy)
-            // SuperAdmin może widzieć wszystkich (także poza organizacją)
             
+            // Zapisujemy kontekst organizacji i roli w req
+            req.organizationId = numericOrganizationId;
+            req.userRoleInOrg = userRoleInOrg;
             return next();
           } catch (dbError) {
             console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Błąd bazy danych przy weryfikacji użytkownika:`, dbError);
@@ -163,7 +192,8 @@ export const verifyResourceAccess = (options: ResourceAccessOptions = { resource
               console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Nie znaleziono zwierzęcia o ID ${resourceId}`);
               return res.status(404).json({
                 status: 'error',
-                message: 'Żądane zwierzę nie istnieje'
+                message: 'Żądane zwierzę nie istnieje',
+                code: 'ANIMAL_NOT_FOUND'
               });
             }
 
@@ -175,27 +205,32 @@ export const verifyResourceAccess = (options: ResourceAccessOptions = { resource
               SELECT ou.user_id
               FROM organization_user ou
               WHERE ou.user_id = $1 AND ou.organization_id = $2
-            `, [ownerId, organizationId]);
+            `, [ownerId, numericOrganizationId]);
 
             // Jeśli brak relacji właściciela z organizacją i to nie jest sam właściciel
-            if (ownerQuery.rows.length === 0 && req.userId.toString() !== ownerId.toString()) {
-              console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Właściciel zwierzęcia (${ownerId}) nie należy do organizacji ${organizationId}`);
+            if (ownerQuery.rows.length === 0 && Number(req.userId) !== Number(ownerId)) {
+              console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Właściciel zwierzęcia (${ownerId}) nie należy do organizacji ${numericOrganizationId}`);
               return res.status(404).json({
                 status: 'error',
-                message: 'Żądane zwierzę nie należy do Twojej organizacji'
+                message: 'Żądane zwierzę nie należy do Twojej organizacji',
+                code: 'ANIMAL_NOT_IN_ORGANIZATION'
               });
             }
 
             // Jeśli użytkownik jest klientem/farmerem, sprawdź czy jest właścicielem zwierzęcia
             if ((userRoleInOrg === 'client' || userRoleInOrg === 'farmer') && 
-                req.userId.toString() !== ownerId.toString()) {
+                Number(req.userId) !== Number(ownerId)) {
               console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Klient/farmer ${req.userId} próbuje uzyskać dostęp do zwierzęcia należącego do innego właściciela ${ownerId}`);
               return res.status(403).json({
                 status: 'error',
-                message: 'Brak uprawnień do tego zwierzęcia'
+                message: 'Brak uprawnień do tego zwierzęcia',
+                code: 'INSUFFICIENT_PERMISSIONS'
               });
             }
 
+            // Zapisujemy kontekst organizacji i roli w req
+            req.organizationId = numericOrganizationId;
+            req.userRoleInOrg = userRoleInOrg;
             return next();
           } catch (dbError) {
             console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Błąd bazy danych przy weryfikacji dostępu do zwierzęcia:`, dbError);
@@ -230,7 +265,8 @@ export const verifyResourceAccess = (options: ResourceAccessOptions = { resource
           console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Nieznany typ zasobu: ${resourceType}`);
           return res.status(500).json({
             status: 'error',
-            message: 'Błąd serwera: Nieznany typ zasobu'
+            message: 'Błąd serwera: Nieznany typ zasobu',
+            code: 'UNKNOWN_RESOURCE_TYPE'
           });
       }
 
@@ -240,13 +276,14 @@ export const verifyResourceAccess = (options: ResourceAccessOptions = { resource
           const query = await db.query(`
             SELECT ${resourceColumn} FROM ${tableName}
             WHERE ${resourceColumn} = $1 AND ${orgColumn} = $2
-          `, [resourceId, organizationId]);
+          `, [resourceId, numericOrganizationId]);
 
           if (query.rows.length === 0) {
-            console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Zasób ${resourceType} o ID ${resourceId} nie należy do organizacji ${organizationId}`);
+            console.error(`[RESOURCE_ACCESS_MIDDLEWARE] Zasób ${resourceType} o ID ${resourceId} nie należy do organizacji ${numericOrganizationId}`);
             return res.status(404).json({
               status: 'error',
-              message: 'Żądany zasób nie istnieje lub nie masz do niego dostępu'
+              message: 'Żądany zasób nie istnieje lub nie masz do niego dostępu',
+              code: 'RESOURCE_NOT_FOUND'
             });
           }
         } catch (dbError) {
@@ -256,8 +293,8 @@ export const verifyResourceAccess = (options: ResourceAccessOptions = { resource
       }
 
       // Jeśli wszystko jest OK, dopisz organizationId i przechodź dalej
-      req.organizationId = organizationId;
-      req.userRoleInOrg = userRoleInOrg; // userRoleInOrg jest już typu string | undefined
+      req.organizationId = numericOrganizationId;
+      req.userRoleInOrg = userRoleInOrg;
       
       next();
     } catch (error) {

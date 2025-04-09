@@ -1,17 +1,46 @@
+/**
+ * Rozszerzenie typów dla Express Request
+ * @author KR0-N0S1
+ * @date 2025-04-08 19:00:56
+ */
+
 import { Request, Response, NextFunction } from 'express';
 
-// Zachowujemy globalne rozszerzenie Request
 declare global {
   namespace Express {
+    interface User {
+      id: number;
+      email: string;
+      first_name?: string;
+      last_name?: string;
+      phone?: string;
+      street?: string;
+      house_number?: string;
+      city?: string;
+      postal_code?: string;
+      tax_id?: string;
+      status: 'active' | 'inactive';
+      created_at: Date;
+      updated_at: Date;
+      organizations: Array<{
+        id: number;
+        name: string;
+        role: string;
+        city?: string;
+        street?: string;
+        house_number?: string;
+      }>;
+    }
+
     interface Request {
-      userId?: string | number;
-      user?: any;
+      userId: number;
+      user: User;
       userOrganizations?: Array<{
-        id: string | number;
+        id: number;
         role: string;
         [key: string]: any;
       }>;
-      organizationId?: string | number;
+      organizationId?: number;
       userRoleInOrg?: string;
       organizationModules?: Array<{
         code: string;
@@ -26,23 +55,12 @@ declare global {
   }
 }
 
-// Dodajemy eksportowane typy potrzebne w kontrolerach
-export interface RequestWithUser extends Request {
-  userId?: number;
-  user?: any;
-  userOrganizations?: Array<{
-    id: number;
-    role: string;
-    [key: string]: any;
-  }>;
-  organizationId?: number;
-  userRoleInOrg?: string;
-}
-
+// Eksportowane typy dla kontrolerów
+export interface RequestWithUser extends Request {}
 export type ControllerFunction = (
   req: RequestWithUser,
   res: Response,
   next: NextFunction
 ) => Promise<void | Response>;
 
-export {}; // Aby traktować plik jako moduł
+export {}; // To make it a module and avoid TS1064 error

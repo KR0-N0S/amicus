@@ -1,3 +1,9 @@
+/**
+ * Serwis uwierzytelniania
+ * @author KR0-N0S1
+ * @date 2025-04-08 19:24:56
+ */
+
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import * as userRepository from '../repositories/userRepository';
@@ -13,6 +19,7 @@ import {
   UserProfileResult
 } from '../types/services/authService';
 import { SignOptions } from 'jsonwebtoken';
+import { AppError } from '../middleware/errorHandler';
 
 class AuthService {
   /**
@@ -37,14 +44,14 @@ class AuthService {
     // Sprawdź, czy użytkownik o takim emailu już istnieje
     const existingUser = await userRepository.findByEmail(userData.email);
     if (existingUser) {
-      throw new Error('Użytkownik o takim adresie email już istnieje');
+      throw new AppError('Użytkownik o takim adresie email już istnieje', 400);
     }
 
     // Sprawdź, czy podany numer stada już istnieje w systemie (jeśli podano)
     if (herdData && herdData.registration_number) {
       const herdExists = await (herdRepository as any).checkHerdRegistrationNumberExists(herdData.registration_number);
       if (herdExists) {
-        throw new Error('Gospodarstwo o podanym numerze rejestracyjnym już istnieje w systemie');
+        throw new AppError('Gospodarstwo o podanym numerze rejestracyjnym już istnieje w systemie', 400);
       }
     }
 
@@ -64,8 +71,8 @@ class AuthService {
     // Jeśli przekazano dane organizacji, utwórz ją i przypisz użytkownika jako administratora
     if (organizationData && organizationData.name) {
       console.log('[AUTH_SERVICE] Tworzenie organizacji:', organizationData.name);
-      const newOrganization = await (organizationRepository as any).create(organizationData);
-      await (organizationRepository as any).addUserToOrganization(newOrganization.id, newUser.id, 'owner');
+      const newOrganization = await organizationRepository.create(organizationData as any);
+      await organizationRepository.addUserToOrganization(newOrganization.id, newUser.id, 'owner');
       organizationResult = newOrganization;
       console.log('[AUTH_SERVICE] Utworzono organizację, ID:', newOrganization.id);
     }
@@ -90,7 +97,7 @@ class AuthService {
     if (addToOrganizationId) {
       try {
         console.log(`[AUTH_SERVICE] Dodawanie użytkownika ${newUser.id} do organizacji ${addToOrganizationId} z rolą ${userRole}`);
-        await (organizationRepository as any).addUserToOrganization(addToOrganizationId, newUser.id, userRole);
+        await organizationRepository.addUserToOrganization(addToOrganizationId, newUser.id, userRole);
         console.log(`[AUTH_SERVICE] Użytkownik dodany do organizacji ${addToOrganizationId}`);
       } catch (linkError) {
         console.error('[AUTH_SERVICE] Błąd podczas dodawania użytkownika do organizacji:', linkError);
@@ -144,7 +151,7 @@ class AuthService {
       
       if (!user) {
         console.log('[AUTH] ❌ Użytkownik nie znaleziony');
-        throw new Error('Nieprawidłowe dane logowania');
+        throw new AppError('Nieprawidłowe dane logowania', 401);
       }
       
       console.log('[AUTH] ✅ Użytkownik znaleziony, ID:', user.id);
@@ -155,7 +162,7 @@ class AuthService {
       
       if (!isPasswordValid) {
         console.log('[AUTH] ❌ Nieprawidłowe hasło');
-        throw new Error('Nieprawidłowe dane logowania');
+        throw new AppError('Nieprawidłowe dane logowania', 401);
       }
       
       console.log('[AUTH] ✅ Hasło zweryfikowane poprawnie');
@@ -166,8 +173,8 @@ class AuthService {
       let userOrganizationsWithRoles: OrganizationRole[] = [];
       
       try {
-        // Używamy oryginalnej metody
-        organizations = await (organizationRepository as any).getUserOrganizationsWithRoles(user.id);
+        // Używamy poprawionej metody
+        organizations = await organizationRepository.getUserOrganizationsWithRoles(user.id);
         console.log('[AUTH] ✅ Pobrano organizacje z rolami:', organizations.length);
         
         // Przygotowanie danych o organizacjach z rolami do tokenu
@@ -199,8 +206,11 @@ class AuthService {
         refreshToken
       };
     } catch (error) {
-      console.log('[AUTH] ❌ Błąd podczas logowania:', (error as Error).message);
-      throw error;
+      console.log('[AUTH] ❌ Błąd podczas logowania:', error);
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Wystąpił błąd podczas logowania', 500);
     }
   }
 
@@ -260,7 +270,7 @@ class AuthService {
       // Sprawdź czy użytkownik istnieje
       const user = await userRepository.findById(userId);
       if (!user) {
-        throw new Error('Użytkownik nie znaleziony');
+        throw new AppError('Użytkownik nie znaleziony', 401);
       }
       
       // Generuj nowy access token z zachowaniem informacji o organizacjach i rolach
@@ -268,32 +278,51 @@ class AuthService {
       
       return tokens;
     } catch (error) {
-      throw new Error('Nieprawidłowy refresh token');
+      throw new AppError('Nieprawidłowy refresh token', 401);
     }
   }
 
   /**
-   * Pobiera profil użytkownika
-   * @param userId ID użytkownika
-   * @returns Dane profilu użytkownika
+   * Pobiera profil użytkownika wraz z organizacjami i uprawnieniami
+   * @param userId - ID użytkownika
+   * @returns Dane użytkownika wraz z organizacjami i uprawnieniami
    */
   async getUserProfile(userId: number): Promise<UserProfileResult> {
-    const user = await userRepository.findById(userId);
-    if (!user) {
-      throw new Error('Użytkownik nie znaleziony');
+    try {
+      // Pobierz podstawowe informacje o użytkowniku
+      const user = await userRepository.findById(userId);
+      
+      if (!user) {
+        throw new AppError('User not found', 404);
+      }
+
+      // Pobieranie organizacji użytkownika
+      const organizations = await organizationRepository.getUserOrganizationsWithRoles(userId);
+      
+      // Dodaj organizacje do obiektu użytkownika
+      const userWithOrgs = {
+        ...user,
+        organizations: organizations.map(org => ({
+          id: org.id,
+          name: org.name || 'Unknown Organization',
+          role: org.role,
+          city: org.city,
+          street: org.street,
+          house_number: org.house_number
+        }))
+      };
+
+      // Usuń hasło z obiektu użytkownika
+      delete userWithOrgs.password;
+      
+      return {
+        user: userWithOrgs as Omit<User, 'password'>,
+        organizations
+      };
+    } catch (error) {
+      console.error('[AUTH_SERVICE] Error in getUserProfile:', error);
+      throw error;
     }
-
-    // Pobierz organizacje użytkownika wraz z rolami jednym zapytaniem
-    const organizations = await (organizationRepository as any).getUserOrganizationsWithRoles(userId);
-
-    // Usuń hasło z obiektu użytkownika
-    const userToReturn = { ...user };
-    delete userToReturn.password;
-    
-    return {
-      user: userToReturn as Omit<User, 'password'>,
-      organizations
-    };
   }
 }
 

@@ -8,7 +8,10 @@
     "start": "node dist/server.js",
     "dev": "nodemon --exec ts-node server.ts",
     "test": "jest",
-    "test:coverage": "jest --coverage"
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

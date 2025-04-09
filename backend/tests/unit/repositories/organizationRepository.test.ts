@@ -1,5 +1,30 @@
-const organizationRepository = require('../../../repositories/organizationRepository');
-const db = require('../../../config/db');
+import * as organizationRepository from '../../../repositories/organizationRepository';
+import * as db from '../../../config/db';
+import { Organization } from '../../../types/models/organization';
+
+// Definicje typów dla repozytoriów
+interface OrganizationCreateData {
+  name: string;
+  street?: string;
+  house_number?: string;
+  city?: string;
+  postal_code?: string;
+  tax_id?: string;
+}
+
+// Interfejs dla metod repozytorium
+interface OrganizationRepositoryInterface {
+  findById(id: number): Promise<Organization | undefined>;
+  create(data: OrganizationCreateData): Promise<Organization>;
+  addUserToOrganization(organizationId: number, userId: number, role: string): Promise<any>;
+  removeUserFromOrganization(organizationId: number, userId: number): Promise<any>;
+  getUserOrganizations(userId: number): Promise<Organization[]>;
+  getUserOrganizationsWithRoles(userId: number): Promise<any[]>;
+  getUserRole(organizationId: number, userId: number): Promise<string | undefined>;
+}
+
+// Rzutowanie typu dla repozytorium
+const typedOrgRepo = organizationRepository as unknown as OrganizationRepositoryInterface;
 
 // Mockowanie modułu db
 jest.mock('../../../config/db', () => ({
@@ -22,12 +47,12 @@ describe('OrganizationRepository', () => {
         city: 'Test City'
       };
 
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: [mockOrganization]
       });
 
       // Act
-      const result = await organizationRepository.findById(orgId);
+      const result = await typedOrgRepo.findById(orgId);
 
       // Assert
       expect(db.query).toHaveBeenCalledWith(
@@ -40,12 +65,12 @@ describe('OrganizationRepository', () => {
     test('zwraca undefined gdy organizacja nie została znaleziona', async () => {
       // Arrange
       const orgId = 999;
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: []
       });
 
       // Act
-      const result = await organizationRepository.findById(orgId);
+      const result = await typedOrgRepo.findById(orgId);
 
       // Assert
       expect(db.query).toHaveBeenCalledWith(
@@ -59,7 +84,7 @@ describe('OrganizationRepository', () => {
   describe('create', () => {
     test('tworzy nową organizację i zwraca jej dane', async () => {
       // Arrange
-      const organizationData = {
+      const organizationData: OrganizationCreateData = {
         name: 'New Organization',
         street: 'New Street',
         house_number: '10',
@@ -75,12 +100,12 @@ describe('OrganizationRepository', () => {
         updated_at: new Date()
       };
 
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: [createdOrganization]
       });
 
       // Act
-      const result = await organizationRepository.create(organizationData);
+      const result = await typedOrgRepo.create(organizationData);
 
       // Assert
       expect(db.query).toHaveBeenCalledWith(
@@ -113,12 +138,12 @@ describe('OrganizationRepository', () => {
         updated_at: new Date()
       };
 
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: [relation]
       });
 
       // Act
-      const result = await organizationRepository.addUserToOrganization(organizationId, userId, role);
+      const result = await typedOrgRepo.addUserToOrganization(organizationId, userId, role);
 
       // Assert
       expect(db.query).toHaveBeenCalledWith(
@@ -140,12 +165,12 @@ describe('OrganizationRepository', () => {
         user_id: userId
       };
 
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: [relation]
       });
 
       // Act
-      const result = await organizationRepository.removeUserFromOrganization(organizationId, userId);
+      const result = await typedOrgRepo.removeUserFromOrganization(organizationId, userId);
 
       // Assert
       expect(db.query).toHaveBeenCalledWith(
@@ -171,12 +196,12 @@ describe('OrganizationRepository', () => {
         }
       ];
 
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: mockOrganizations
       });
 
       // Act
-      const result = await organizationRepository.getUserOrganizations(userId);
+      const result = await typedOrgRepo.getUserOrganizations(userId);
 
       // Assert
       expect(db.query).toHaveBeenCalledWith(
@@ -204,12 +229,12 @@ describe('OrganizationRepository', () => {
         }
       ];
 
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: mockOrganizations
       });
 
       // Act
-      const result = await organizationRepository.getUserOrganizationsWithRoles(userId);
+      const result = await typedOrgRepo.getUserOrganizationsWithRoles(userId);
 
       // Assert
       expect(db.query).toHaveBeenCalledWith(
@@ -227,12 +252,12 @@ describe('OrganizationRepository', () => {
       const userId = 10;
       const role = 'admin';
 
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: [{ role }]
       });
 
       // Act
-      const result = await organizationRepository.getUserRole(organizationId, userId);
+      const result = await typedOrgRepo.getUserRole(organizationId, userId);
 
       // Assert
       expect(db.query).toHaveBeenCalledWith(
@@ -247,12 +272,12 @@ describe('OrganizationRepository', () => {
       const organizationId = 5;
       const userId = 10;
 
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: []
       });
 
       // Act
-      const result = await organizationRepository.getUserRole(organizationId, userId);
+      const result = await typedOrgRepo.getUserRole(organizationId, userId);
 
       // Assert
       expect(db.query).toHaveBeenCalledWith(

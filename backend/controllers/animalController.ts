@@ -1,20 +1,30 @@
 /**
  * Kontroler operacji na zwierzętach
- * @author KR0-N0S
- * @date 2025-04-08 14:50:47
+ * @author KR0-N0S1
+ * @date 2025-04-08 18:57:10
  */
 
 import { Response, NextFunction } from 'express';
-import * as animalService from '../services/animalService';
+import animalService from '../services/animalService'; // Użycie importu domyślnego
 import { AppError } from '../middleware/errorHandler';
 import { HTTP_STATUS, PAGINATION, ANIMAL_TYPES, SEARCH } from '../config/constants';
 import { Roles } from '../constants/roles';
 import { verifyResourceAccess } from '../middleware/resourceAccessMiddleware';
-import { RequestWithUser, ControllerFunction } from '../types/express';
+import { RequestWithUser, ControllerFunction } from '../types/express'; // Import z głównego pliku definicji typów
 import { AnimalCreateData, AnimalUpdateData, PaginatedAnimalResult } from '../types/models/animal';
 
-// Uwaga: w tym podejściu, middleware weryfikujący dostęp powinien być użyty
-// w definicjach tras (routes) przed wywołaniem kontrolerów
+// Funkcja pomocnicza do mapowania typów paginacji
+function mapPagination(result: any, page: number, limit: number): PaginatedAnimalResult {
+  return {
+    animals: result.animals || [],
+    pagination: {
+      page: page,
+      limit: limit,
+      totalCount: result.pagination?.totalCount || 0,
+      totalPages: result.pagination?.totalPages || 1
+    }
+  };
+}
 
 export const getAnimal: ControllerFunction = async (
   req: RequestWithUser,
@@ -23,7 +33,7 @@ export const getAnimal: ControllerFunction = async (
 ) => {
   try {
     const animalId = parseInt(req.params.id);
-    const animal = await (animalService as any).getAnimal(animalId);
+    const animal = await animalService.getAnimal(animalId);
     
     res.status(HTTP_STATUS.OK).json({
       status: 'success',
@@ -85,15 +95,18 @@ export const getUserAnimals: ControllerFunction = async (
         // Wybieramy metodę wyszukiwania w zależności od uprawnień i parametrów
         if (userRoleInOrg === 'client' || userRoleInOrg === 'farmer') {
           // Klient/farmer może przeszukiwać tylko swoje zwierzęta
-          result = await (animalService as any).searchAnimalsByOwnerId(trimmedSearchTerm, req.userId, animalType, page, limit);
+          const searchResult = await animalService.searchAnimalsByOwnerId(trimmedSearchTerm, req.userId, animalType, page, limit);
+          result = mapPagination(searchResult, page, limit);
         }
         else if (ownerId) {
           // Wyszukiwanie w zwierzętach konkretnego właściciela
-          result = await (animalService as any).searchAnimalsByOwnerId(trimmedSearchTerm, ownerId, animalType, page, limit);
+          const searchResult = await animalService.searchAnimalsByOwnerId(trimmedSearchTerm, ownerId, animalType, page, limit);
+          result = mapPagination(searchResult, page, limit);
         }
         else if (organizationId) {
           // Wyszukiwanie w zwierzętach całej organizacji
-          result = await (animalService as any).searchAnimalsByOrganizationId(trimmedSearchTerm, organizationId, animalType, page, limit);
+          const searchResult = await animalService.searchAnimalsByOrganizationId(trimmedSearchTerm, organizationId, animalType, page, limit);
+          result = mapPagination(searchResult, page, limit);
         }
         else {
           return res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -108,13 +121,16 @@ export const getUserAnimals: ControllerFunction = async (
         }
         
         if (userRoleInOrg === 'client' || userRoleInOrg === 'farmer') {
-          result = await (animalService as any).getOwnerAnimals(req.userId, page, limit, animalType);
+          const ownerResult = await animalService.getOwnerAnimals(req.userId, page, limit, animalType);
+          result = mapPagination(ownerResult, page, limit);
         }
         else if (ownerId) {
-          result = await (animalService as any).getOwnerAnimals(ownerId, page, limit, animalType);
+          const ownerResult = await animalService.getOwnerAnimals(ownerId, page, limit, animalType);
+          result = mapPagination(ownerResult, page, limit);
         }
         else if (organizationId) {
-          result = await (animalService as any).getOrganizationAnimals(organizationId, page, limit, animalType);
+          const orgResult = await animalService.getOrganizationAnimals(organizationId, page, limit, animalType);
+          result = mapPagination(orgResult, page, limit);
         }
         else {
           return res.status(HTTP_STATUS.BAD_REQUEST).json({
@@ -201,7 +217,6 @@ export const createAnimal: ControllerFunction = async (
       weight: req.body.weight ? Number(req.body.weight) : null,
       photo: req.body.photo,
       notes: req.body.notes
-      // Usunięto pola registration_date i age, które nie istnieją w tabeli animals
     };
 
     // Dane specyficzne dla typu zwierzęcia - zachowujemy registration_date tylko w farm_animal
@@ -224,7 +239,7 @@ export const createAnimal: ControllerFunction = async (
       animalData.companion_animal = req.body.companion_animal;
     }
 
-    const animal = await (animalService as any).createAnimal(animalData);
+    const animal = await animalService.createAnimal(animalData);
 
     res.status(HTTP_STATUS.CREATED).json({
       status: 'success',
@@ -248,7 +263,7 @@ export const updateAnimal: ControllerFunction = async (
     const animalId = parseInt(req.params.id);
     
     // Pobierz aktualne dane zwierzęcia
-    const animal = await (animalService as any).getAnimal(animalId);
+    const animal = await animalService.getAnimal(animalId);
     
     // Middleware verifyResourceAccess już sprawdził uprawnienia na poziomie organizacji
     // Nie musimy dodatkowo sprawdzać uprawnień właściciela
@@ -277,7 +292,7 @@ export const updateAnimal: ControllerFunction = async (
       animalData.companion_animal = req.body.companion_animal;
     }
 
-    const updatedAnimal = await (animalService as any).updateAnimal(animalId, animalData);
+    const updatedAnimal = await animalService.updateAnimal(animalId, animalData);
 
     res.status(HTTP_STATUS.OK).json({
       status: 'success',
@@ -297,9 +312,9 @@ export const deleteAnimal: ControllerFunction = async (
     const animalId = parseInt(req.params.id);
     
     // Pobranie informacji o zwierzęciu - middleware już zweryfikował uprawnienia
-    await (animalService as any).getAnimal(animalId);
+    await animalService.getAnimal(animalId);
     
-    await (animalService as any).deleteAnimal(animalId);
+    await animalService.deleteAnimal(animalId);
 
     res.status(HTTP_STATUS.OK).json({
       status: 'success',

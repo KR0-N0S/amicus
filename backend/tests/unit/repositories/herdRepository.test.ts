@@ -1,5 +1,41 @@
-const herdRepository = require('../../../repositories/herdRepository');
-const db = require('../../../config/db');
+import * as herdRepository from '../../../repositories/herdRepository';
+import * as db from '../../../config/db';
+
+// Definicje typów dla testów
+interface HerdData {
+  name?: string;
+  registration_number: string;
+  evaluation_number?: string;
+  owner_type: string;
+  owner_id: number;
+  street?: string;
+  house_number?: string;
+  city?: string;
+  postal_code?: string;
+}
+
+interface Herd {
+  id: number;
+  herd_id: string;
+  eval_herd_no?: string;
+  owner_type: string;
+  owner_id: number;
+  street?: string;
+  house_number?: string;
+  city?: string;
+  postal_code?: string;
+}
+
+// Interfejs dla metod repozytorium
+interface HerdRepositoryInterface {
+  create(herdData: HerdData): Promise<Herd>;
+  getByOwnerId(ownerId: number, ownerType: string): Promise<Herd[]>;
+  getById(id: number): Promise<Herd | null>;
+  checkHerdRegistrationNumberExists(registrationNumber: string): Promise<boolean>;
+}
+
+// Rzutowanie typu dla repozytorium
+const typedHerdRepo = herdRepository as unknown as HerdRepositoryInterface;
 
 // Mockowanie modułu db
 jest.mock('../../../config/db', () => ({
@@ -14,7 +50,7 @@ describe('HerdRepository', () => {
   describe('create', () => {
     test('tworzy nowe stado i zwraca jego dane', async () => {
       // Arrange
-      const herdData = {
+      const herdData: HerdData = {
         name: 'Test Herd',
         registration_number: 'PL12345',
         evaluation_number: 'EVAL123',
@@ -26,7 +62,7 @@ describe('HerdRepository', () => {
         postal_code: '00-000'
       };
 
-      const createdHerd = {
+      const createdHerd: Herd = {
         id: 1,
         herd_id: 'PL12345',
         eval_herd_no: 'EVAL123',
@@ -38,12 +74,12 @@ describe('HerdRepository', () => {
         postal_code: '00-000'
       };
 
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: [createdHerd]
       });
 
       // Act
-      const result = await herdRepository.create(herdData);
+      const result = await typedHerdRepo.create(herdData);
 
       // Assert
       expect(db.query).toHaveBeenCalledWith(
@@ -64,17 +100,17 @@ describe('HerdRepository', () => {
 
     test('obsługuje błędy podczas tworzenia stada', async () => {
       // Arrange
-      const herdData = {
+      const herdData: Partial<HerdData> = {
         registration_number: 'PL12345',
         owner_type: 'user',
         owner_id: 10
       };
 
       const error = new Error('Database error');
-      db.query.mockRejectedValue(error);
+      (db.query as jest.Mock).mockRejectedValue(error);
 
       // Act & Assert
-      await expect(herdRepository.create(herdData)).rejects.toThrow('Database error');
+      await expect(typedHerdRepo.create(herdData as HerdData)).rejects.toThrow('Database error');
       expect(db.query).toHaveBeenCalled();
     });
   });
@@ -84,7 +120,7 @@ describe('HerdRepository', () => {
       // Arrange
       const ownerId = 10;
       const ownerType = 'user';
-      const mockHerds = [
+      const mockHerds: Herd[] = [
         {
           id: 1,
           herd_id: 'PL12345',
@@ -99,12 +135,12 @@ describe('HerdRepository', () => {
         }
       ];
 
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: mockHerds
       });
 
       // Act
-      const result = await herdRepository.getByOwnerId(ownerId, ownerType);
+      const result = await typedHerdRepo.getByOwnerId(ownerId, ownerType);
 
       // Assert
       expect(db.query).toHaveBeenCalledWith(
@@ -119,12 +155,12 @@ describe('HerdRepository', () => {
       const ownerId = 10;
       const ownerType = 'user';
 
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: []
       });
 
       // Act
-      const result = await herdRepository.getByOwnerId(ownerId, ownerType);
+      const result = await typedHerdRepo.getByOwnerId(ownerId, ownerType);
 
       // Assert
       expect(db.query).toHaveBeenCalledWith(
@@ -139,19 +175,19 @@ describe('HerdRepository', () => {
     test('zwraca stado gdy zostało znalezione', async () => {
       // Arrange
       const herdId = 1;
-      const mockHerd = {
+      const mockHerd: Herd = {
         id: herdId,
         herd_id: 'PL12345',
         owner_id: 10,
         owner_type: 'user'
       };
 
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: [mockHerd]
       });
 
       // Act
-      const result = await herdRepository.getById(herdId);
+      const result = await typedHerdRepo.getById(herdId);
 
       // Assert
       expect(db.query).toHaveBeenCalledWith('SELECT * FROM herds WHERE id = $1', [herdId]);
@@ -161,12 +197,12 @@ describe('HerdRepository', () => {
     test('zwraca null gdy stado nie zostało znalezione', async () => {
       // Arrange
       const herdId = 999;
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: []
       });
 
       // Act
-      const result = await herdRepository.getById(herdId);
+      const result = await typedHerdRepo.getById(herdId);
 
       // Assert
       expect(db.query).toHaveBeenCalledWith('SELECT * FROM herds WHERE id = $1', [herdId]);
@@ -178,12 +214,12 @@ describe('HerdRepository', () => {
     test('zwraca true gdy numer rejestracyjny istnieje', async () => {
       // Arrange
       const registrationNumber = 'PL12345';
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: [{ exists: true }]
       });
 
       // Act
-      const result = await herdRepository.checkHerdRegistrationNumberExists(registrationNumber);
+      const result = await typedHerdRepo.checkHerdRegistrationNumberExists(registrationNumber);
 
       // Assert
       expect(db.query).toHaveBeenCalledWith(
@@ -196,12 +232,12 @@ describe('HerdRepository', () => {
     test('zwraca false gdy numer rejestracyjny nie istnieje', async () => {
       // Arrange
       const registrationNumber = 'PL99999';
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: [{ exists: false }]
       });
 
       // Act
-      const result = await herdRepository.checkHerdRegistrationNumberExists(registrationNumber);
+      const result = await typedHerdRepo.checkHerdRegistrationNumberExists(registrationNumber);
 
       // Assert
       expect(db.query).toHaveBeenCalledWith(

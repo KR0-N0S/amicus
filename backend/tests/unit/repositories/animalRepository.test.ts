@@ -1,5 +1,23 @@
-const animalRepository = require('../../../repositories/animalRepository');
-const db = require('../../../config/db');
+import * as animalRepository from '../../../repositories/animalRepository';
+import * as db from '../../../config/db';
+import { Animal, AnimalType } from '../../../types/models/animal';
+
+// Definiujemy interfejs dla metod repozytorium
+interface AnimalRepositoryInterface {
+  findById(id: number): Promise<Animal | null>;
+  create(animalData: any, animalType: string, specificData: any): Promise<Animal | null>;
+  update(id: number, animalData: any, animalType?: string, specificData?: any): Promise<Animal | null>;
+  delete(id: number): Promise<boolean>;
+  _mapAnimal(row: any): Animal | null;
+}
+
+// Rozszerzamy interfejs Animal dla testów
+interface AnimalExtended extends Animal {
+  age?: number;  // Dodajemy właściwość age, która może być dynamiczną właściwością w wynikach z repozytorium
+}
+
+// Rzutowanie typu dla repozytorium
+const typedAnimalRepo = animalRepository as unknown as AnimalRepositoryInterface;
 
 // Mock modułu db
 jest.mock('../../../config/db', () => ({
@@ -30,31 +48,31 @@ describe('AnimalRepository', () => {
         }
       };
       
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: [mockAnimal]
       });
 
       // Act
-      const result = await animalRepository.findById(1);
+      const result = await typedAnimalRepo.findById(1);
 
       // Assert
       expect(result).not.toBeNull();
-      expect(result.id).toBe(1);
-      expect(result.species).toBe('Cattle');
-      expect(result.farm_animal).toBeDefined();
-      expect(result.farm_animal.identifier).toBe('PL123456789');
+      expect(result!.id).toBe(1);
+      expect(result!.species).toBe('Cattle');
+      expect(result!.farm_animal).toBeDefined();
+      expect(result!.farm_animal!.identifier).toBe('PL123456789');
       expect(db.query).toHaveBeenCalledTimes(1);
-      expect(db.query.mock.calls[0][1]).toEqual([1]); // Sprawdza czy ID zostało prawidłowo przekazane
+      expect((db.query as jest.Mock).mock.calls[0][1]).toEqual([1]); // Sprawdza czy ID zostało prawidłowo przekazane
     });
 
     it('should return null when animal is not found', async () => {
       // Arrange
-      db.query.mockResolvedValue({
+      (db.query as jest.Mock).mockResolvedValue({
         rows: []
       });
 
       // Act
-      const result = await animalRepository.findById(999);
+      const result = await typedAnimalRepo.findById(999);
 
       // Assert
       expect(result).toBeNull();
@@ -63,10 +81,10 @@ describe('AnimalRepository', () => {
 
     it('should return null when query throws error', async () => {
       // Arrange
-      db.query.mockRejectedValue(new Error('Database error'));
+      (db.query as jest.Mock).mockRejectedValue(new Error('Database error'));
 
       // Act
-      const result = await animalRepository.findById(1);
+      const result = await typedAnimalRepo.findById(1);
 
       // Assert
       expect(result).toBeNull();
@@ -76,7 +94,7 @@ describe('AnimalRepository', () => {
 
   describe('_mapAnimal', () => {
     it('should return null for null input', () => {
-      const result = animalRepository._mapAnimal(null);
+      const result = typedAnimalRepo._mapAnimal(null);
       expect(result).toBeNull();
     });
 
@@ -85,8 +103,11 @@ describe('AnimalRepository', () => {
       const mockRow = {
         id: 1,
         species: 'Cattle',
-        animal_type: 'farm',
+        animal_type: AnimalType.FARM,
         birth_date: '2020-01-01',
+        owner_id: 5,
+        created_at: new Date(),
+        updated_at: new Date(),
         animal_details: {
           identifier: 'PL123456789',
           registration_date: '2020-01-15',
@@ -96,15 +117,15 @@ describe('AnimalRepository', () => {
       };
 
       // Act
-      const result = animalRepository._mapAnimal(mockRow);
+      const result = typedAnimalRepo._mapAnimal(mockRow);
 
       // Assert
       expect(result).not.toBeNull();
-      expect(result.id).toBe(1);
-      expect(result.farm_animal).toBeDefined();
-      expect(result.farm_animal.identifier).toBe('PL123456789');
-      expect(result.animal_number).toBe('PL123456789');
-      expect(result.animal_details).toBeUndefined();
+      expect(result!.id).toBe(1);
+      expect(result!.farm_animal).toBeDefined();
+      expect(result!.farm_animal!.identifier).toBe('PL123456789');
+      expect(result!.animal_number).toBe('PL123456789');
+      expect((result as any).animal_details).toBeUndefined();
     });
 
     it('should correctly map companion animal', () => {
@@ -112,8 +133,11 @@ describe('AnimalRepository', () => {
       const mockRow = {
         id: 2,
         species: 'Dog',
-        animal_type: 'companion',
+        animal_type: AnimalType.COMPANION,
         birth_date: '2019-05-10',
+        owner_id: 5,
+        created_at: new Date(),
+        updated_at: new Date(),
         animal_details: {
           chip_number: '123456789012345',
           sterilized: true,
@@ -123,14 +147,14 @@ describe('AnimalRepository', () => {
       };
 
       // Act
-      const result = animalRepository._mapAnimal(mockRow);
+      const result = typedAnimalRepo._mapAnimal(mockRow);
 
       // Assert
       expect(result).not.toBeNull();
-      expect(result.id).toBe(2);
-      expect(result.companion_animal).toBeDefined();
-      expect(result.companion_animal.chip_number).toBe('123456789012345');
-      expect(result.animal_details).toBeUndefined();
+      expect(result!.id).toBe(2);
+      expect(result!.companion_animal).toBeDefined();
+      expect(result!.companion_animal!.microchip_number).toBe('123456789012345');
+      expect((result as any).animal_details).toBeUndefined();
     });
 
     it('should calculate age correctly', () => {
@@ -142,15 +166,19 @@ describe('AnimalRepository', () => {
       const mockRow = {
         id: 3,
         species: 'Cat',
-        animal_type: 'companion',
-        birth_date: twoYearsAgo.toISOString().split('T')[0]
+        animal_type: AnimalType.COMPANION,
+        birth_date: twoYearsAgo.toISOString().split('T')[0],
+        owner_id: 5,
+        created_at: new Date(),
+        updated_at: new Date()
       };
 
       // Act
-      const result = animalRepository._mapAnimal(mockRow);
+      const result = typedAnimalRepo._mapAnimal(mockRow);
 
       // Assert
-      expect(result.age).toBe(2);
+      // Używamy rzutowania, ponieważ age jest dynamicznie obliczane, a nie częścią interfejsu
+      expect((result as AnimalExtended)!.age).toBe(2);
     });
   });
 
@@ -162,7 +190,8 @@ describe('AnimalRepository', () => {
         species: 'Cattle',
         sex: 'M',
         breed: 'Holstein',
-        birth_date: '2020-01-01'
+        birth_date: '2020-01-01',
+        animal_type: AnimalType.FARM
       };
       
       const specificData = {
@@ -173,13 +202,12 @@ describe('AnimalRepository', () => {
       };
 
       // Mock queries
-      db.query.mockImplementation((sql, params) => {
+      (db.query as jest.Mock).mockImplementation((sql: string, params: any[]) => {
         if (sql.includes('INSERT INTO animals')) {
           return {
             rows: [{
               id: 1,
-              ...animalData,
-              animal_type: 'farm'
+              ...animalData
             }]
           };
         }
@@ -194,23 +222,24 @@ describe('AnimalRepository', () => {
         if (sql.includes('BEGIN') || sql.includes('COMMIT')) {
           return { rows: [] };
         }
+        return { rows: [] };
       });
 
       // Act
-      const result = await animalRepository.create(animalData, 'farm', specificData);
+      const result = await typedAnimalRepo.create(animalData, 'farm', specificData);
 
       // Assert
       expect(result).toBeDefined();
-      expect(result.id).toBe(1);
-      expect(result.animal_type).toBe('farm');
-      expect(result.farm_animal).toBeDefined();
-      expect(result.farm_animal.identifier).toBe('PL123456789');
+      expect(result!.id).toBe(1);
+      expect(result!.animal_type).toBe(AnimalType.FARM);
+      expect(result!.farm_animal).toBeDefined();
+      expect(result!.farm_animal!.identifier).toBe('PL123456789');
       expect(db.query).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO farm_animals'), expect.any(Array));
     });
 
     it('should throw error when missing required data', async () => {
       // Arrange & Act & Assert
-      await expect(animalRepository.create(null, 'farm', {}))
+      await expect(typedAnimalRepo.create(null as any, 'farm', {}))
         .rejects
         .toThrow('Missing required data for animal creation');
     });
@@ -225,13 +254,13 @@ describe('AnimalRepository', () => {
         breed: 'Updated Breed'
       };
       
-      db.query.mockImplementation((sql, params) => {
+      (db.query as jest.Mock).mockImplementation((sql: string, params: any[]) => {
         if (sql.includes('UPDATE animals')) {
           return {
             rows: [{
               id: animalId,
               ...updateData,
-              animal_type: 'farm'
+              animal_type: AnimalType.FARM
             }]
           };
         }
@@ -239,13 +268,14 @@ describe('AnimalRepository', () => {
           return {
             rows: [{
               id: animalId,
-              animal_type: 'farm'
+              animal_type: AnimalType.FARM
             }]
           };
         }
         if (sql.includes('BEGIN') || sql.includes('COMMIT') || sql.includes('SELECT id FROM farm_animals')) {
           return { rows: [] };
         }
+        return { rows: [] };
       });
 
       // Mocking findById to return complete animal object
@@ -253,12 +283,20 @@ describe('AnimalRepository', () => {
         id: animalId,
         species: 'Updated Species',
         breed: 'Updated Breed',
-        animal_type: 'farm'
-      };
-      jest.spyOn(animalRepository, 'findById').mockResolvedValue(mockAnimal);
+        animal_type: AnimalType.FARM,
+        owner_id: 5,
+        created_at: new Date(),
+        updated_at: new Date()
+      } as Animal;
+      
+      // Zachowujemy oryginalne metody
+      const originalFindById = typedAnimalRepo.findById;
+      
+      // Mockujemy tymczasowo na potrzeby testu
+      (typedAnimalRepo.findById as jest.Mock) = jest.fn().mockResolvedValue(mockAnimal);
 
       // Act
-      const result = await animalRepository.update(animalId, updateData, 'farm', {});
+      const result = await typedAnimalRepo.update(animalId, updateData, 'farm', {});
 
       // Assert
       expect(result).toEqual(mockAnimal);
@@ -266,13 +304,16 @@ describe('AnimalRepository', () => {
         expect.stringContaining('UPDATE animals'),
         expect.arrayContaining([updateData.species, updateData.breed, animalId])
       );
+
+      // Przywracamy oryginalną metodę
+      typedAnimalRepo.findById = originalFindById;
     });
   });
 
   describe('delete', () => {
     it('should delete animal and return true when successful', async () => {
       // Arrange
-      db.query.mockImplementation((sql, params) => {
+      (db.query as jest.Mock).mockImplementation((sql: string, params: any[]) => {
         if (sql.includes('DELETE FROM animals')) {
           return { rows: [{ id: 1 }] };
         }
@@ -280,7 +321,7 @@ describe('AnimalRepository', () => {
       });
 
       // Act
-      const result = await animalRepository.delete(1);
+      const result = await typedAnimalRepo.delete(1);
 
       // Assert
       expect(result).toBe(true);
@@ -291,12 +332,12 @@ describe('AnimalRepository', () => {
 
     it('should return false when animal not found', async () => {
       // Arrange
-      db.query.mockImplementation((sql, params) => {
+      (db.query as jest.Mock).mockImplementation((sql: string, params: any[]) => {
         return { rows: [] };
       });
 
       // Act
-      const result = await animalRepository.delete(999);
+      const result = await typedAnimalRepo.delete(999);
 
       // Assert
       expect(result).toBe(false);

@@ -1,3 +1,9 @@
+/**
+ * Główny plik aplikacji
+ * @author KR0-N0S1
+ * @date 2025-04-08 19:39:33
+ */
+
 import express, { Request, Response, NextFunction } from 'express';
 import cors, { CorsOptions } from 'cors';
 import helmet from 'helmet';
@@ -19,9 +25,11 @@ import animalRoutes from './routes/animalRoutes';
 import semenProviderRoutes from './routes/semenProviderRoutes';
 
 // Import middleware
+import { verifyToken } from './middleware/authMiddleware';
 import { verifyResourceAccess } from './middleware/resourceAccessMiddleware';
 import { defaultLimiter } from './middleware/rateLimiter';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { ensureOrganizationContext } from './middleware/organizationContext';
 
 // Inicjalizacja aplikacji Express
 const app = express();
@@ -70,7 +78,7 @@ const corsOptions: CorsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-HTTP-Method-Override']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-HTTP-Method-Override', 'X-Organization-Id']
 };
 
 // Middleware
@@ -92,7 +100,6 @@ app.use(helmet({
   crossOriginOpenerPolicy: true,
   crossOriginResourcePolicy: { policy: 'same-site' },
   dnsPrefetchControl: true,
-  // Usunięto przestarzałą właściwość expectCt
   frameguard: { action: 'deny' },
   hidePoweredBy: true,
   hsts: {
@@ -114,7 +121,16 @@ app.use(express.urlencoded({ extended: true }));
 app.use(defaultLimiter);
 
 // Definiowanie tras API
+// Ustawiamy trasy uwierzytelniania najpierw, BEZ weryfikacji tokenu
 app.use('/api/auth', authRoutes);
+
+// Middleware uwierzytelniania dla wszystkich pozostałych ścieżek API
+app.use('/api', verifyToken);
+
+// Dodaj globalny middleware kontekstu organizacji po uwierzytelnieniu
+app.use('/api', ensureOrganizationContext);
+
+// Definiowanie pozostałych tras API (już po middleware uwierzytelniania)
 app.use('/api/users', userRoutes);
 app.use('/api/bulls', bullRoutes);
 app.use('/api/animals', animalRoutes);

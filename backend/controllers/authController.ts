@@ -1,5 +1,12 @@
+/**
+ * Kontroler uwierzytelniania
+ * @author KR0-N0S1
+ * @date 2025-04-08 19:24:56
+ */
+
 import { Response, NextFunction, CookieOptions } from 'express';
 import authService from '../services/authService';
+import * as userRepository from '../repositories/userRepository';
 import { AppError } from '../middleware/errorHandler';
 import { RequestWithUser, ControllerFunction } from '../types/express';
 import { User, UserCreateData } from '../types/models/user';
@@ -58,7 +65,7 @@ export const register: ControllerFunction = async (
     const addToOrganizationId: number | null = req.body.addToOrganizationId || null;
     const userRole: string = req.body.role || 'client'; // Domyślnie 'client', ale możemy przyjąć z req.body
 
-    // KLUCZOWA ZMIANA: Dodanie obsługi flagi zachowania bieżącej sesji
+    // Flaga zachowania bieżącej sesji
     const preserveCurrentSession: boolean = req.body.preserveCurrentSession === true;
 
     // Przekazujemy dodatkowe parametry do serwisu
@@ -79,7 +86,7 @@ export const register: ControllerFunction = async (
       user: result.user,
       organization: result.organization,
       herd: result.herd,
-      // KLUCZOWA ZMIANA: Zwracamy token tylko jeśli nie zachowujemy bieżącej sesji
+      // Zwracamy token tylko jeśli nie zachowujemy bieżącej sesji
       ...(preserveCurrentSession ? {} : { token: result.accessToken })
     };
 
@@ -127,12 +134,12 @@ export const login: ControllerFunction = async (
         data: responseData
       });
     } catch (serviceError) {
-      console.log('[CONTROLLER] ❌ Błąd z authService:', (serviceError as Error).message);
-      return next(new AppError('Nieprawidłowe dane logowania', 401));
+      console.log('[CONTROLLER] ❌ Błąd z authService:', serviceError);
+      return next(serviceError);
     }
   } catch (error) {
-    console.log('[CONTROLLER] ⚠️ Nieoczekiwany błąd:', (error as Error).message);
-    return next(new AppError('Wystąpił błąd podczas logowania', 500));
+    console.log('[CONTROLLER] ⚠️ Nieoczekiwany błąd:', error);
+    return next(error);
   }
 };
 
@@ -142,25 +149,67 @@ export const getMe: ControllerFunction = async (
   next: NextFunction
 ) => {
   try {
-    if (!req.userId) {
-      return next(new AppError('User ID is missing', 400));
+    // Pobierz dane użytkownika
+    const userId = req.userId;
+    
+    if (!userId) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Wymagane uwierzytelnienie'
+      });
     }
     
-    const result = await authService.getUserProfile(req.userId);
-
-    res.status(200).json({
-      status: 'success',
-      data: {
-        user: result.user,
-        organizations: result.organizations
+    try {
+      // Użyj authService do pobrania pełnych danych użytkownika wraz z organizacjami
+      const result = await authService.getUserProfile(userId as number);
+      
+      // Ustaw organizationId w req jeśli użytkownik ma organizacje
+      if (result.user.organizations && result.user.organizations.length > 0 && !req.organizationId) {
+        req.organizationId = result.user.organizations[0].id;
+        
+        // Znajdź rolę użytkownika w organizacji
+        const userOrg = result.user.organizations[0];
+        if (userOrg.role) {
+          req.userRoleInOrg = userOrg.role.toLowerCase();
+        }
       }
-    });
+      
+      res.status(200).json({
+        status: 'success',
+        data: {
+          user: result.user,
+          organizations: result.organizations
+        }
+      });
+    } catch (profileError) {
+      console.error('[AUTH_CONTROLLER] Error fetching user profile:', profileError);
+      
+      // Fallback do podstawowych informacji o użytkowniku, jeśli wystąpił błąd
+      const user = await userRepository.findById(userId as number);
+      
+      if (!user) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Nie znaleziono użytkownika'
+        });
+      }
+      
+      const { password, ...userWithoutPassword } = user;
+      
+      res.status(200).json({
+        status: 'success',
+        data: {
+          user: userWithoutPassword,
+          organizations: []
+        }
+      });
+    }
   } catch (error) {
     next(error);
   }
 };
 
-// Nowy kontroler do odświeżania tokenu
+// Kontroler do odświeżania tokenu
 export const refreshToken: ControllerFunction = async (
   req: RequestWithUser,
   res: Response,
@@ -192,11 +241,11 @@ export const refreshToken: ControllerFunction = async (
   } catch (error) {
     console.error('Token refresh error:', error);
     res.clearCookie('refreshToken'); // usuń nieprawidłowy refresh token
-    return next(new AppError('Refresh token jest nieprawidłowy lub wygasł', 401));
+    next(error);
   }
 };
 
-// Nowy kontroler do wylogowywania
+// Kontroler do wylogowywania
 export const logout: ControllerFunction = async (
   req: RequestWithUser,
   res: Response,

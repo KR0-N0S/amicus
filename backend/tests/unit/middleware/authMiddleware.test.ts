@@ -1,13 +1,27 @@
-const jwt = require('jsonwebtoken');
-const { verifyToken, checkOrganizationAccess } = require('../../../middleware/authMiddleware');
-const userRepository = require('../../../repositories/userRepository');
+import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+import { verifyToken, checkOrganizationAccess } from '../../../middleware/authMiddleware';
+import * as userRepository from '../../../repositories/userRepository';
+import { User } from '../../../types/models/user';
+
+// Rozszerzenie interfejsu dla testów z mutable path
+interface ExtendedRequest extends Partial<Request> {
+  userId?: number;
+  organizationId?: string | number;
+  userRoleInOrg?: string;
+  user?: User;
+  userOrganizations?: Array<{ id: number; role: string }>;
+  path?: string; // Teraz path jest modyfikowalne w testach
+}
 
 // Mockowanie zależności
 jest.mock('jsonwebtoken');
 jest.mock('../../../repositories/userRepository');
 
 describe('AuthMiddleware', () => {
-  let req, res, next;
+  let req: ExtendedRequest;
+  let res: Partial<Response>;
+  let next: jest.MockedFunction<NextFunction>;
 
   beforeEach(() => {
     // Resetowanie mocków
@@ -20,7 +34,7 @@ describe('AuthMiddleware', () => {
       query: {},
       body: {},
       userOrganizations: [],
-      path: '/' // Dodane: Domyślna ścieżka dla wszystkich testów
+      path: '/' // Domyślna ścieżka dla wszystkich testów
     };
 
     res = {
@@ -45,14 +59,14 @@ describe('AuthMiddleware', () => {
         email: 'test@example.com',
         password: 'hashedPassword',
         first_name: 'Jan'
-      };
+      } as User;
 
-      req.headers.authorization = `Bearer ${token}`;
-      jwt.verify.mockReturnValue(decodedToken);
-      userRepository.findById.mockResolvedValue(user);
+      req.headers = { authorization: `Bearer ${token}` };
+      (jwt.verify as jest.Mock).mockReturnValue(decodedToken);
+      (userRepository.findById as jest.Mock).mockResolvedValue(user);
 
       // Act
-      await verifyToken(req, res, next);
+      await verifyToken(req as Request, res as Response, next);
 
       // Assert
       expect(jwt.verify).toHaveBeenCalledWith(
@@ -68,14 +82,14 @@ describe('AuthMiddleware', () => {
         first_name: user.first_name,
         organizations: decodedToken.organizations
       }));
-      expect(req.user.password).toBeUndefined(); // hasło powinno być usunięte
+      expect((req.user as User).password).toBeUndefined(); // hasło powinno być usunięte
       expect(next).toHaveBeenCalled();
       expect(res.status).not.toHaveBeenCalled();
     });
 
     test('zwraca 401 gdy brak tokenu', async () => {
       // Act
-      await verifyToken(req, res, next);
+      await verifyToken(req as Request, res as Response, next);
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(401);
@@ -88,17 +102,17 @@ describe('AuthMiddleware', () => {
 
     test('zwraca 401 gdy token wygasł', async () => {
       // Arrange
-      req.headers.authorization = 'Bearer expired-token';
+      req.headers = { authorization: 'Bearer expired-token' };
       
-      const jwtError = new Error('Token expired');
+      const jwtError = new Error('Token expired') as Error & { name: string };
       jwtError.name = 'TokenExpiredError';
       
-      jwt.verify.mockImplementation(() => {
+      (jwt.verify as jest.Mock).mockImplementation(() => {
         throw jwtError;
       });
 
       // Act
-      await verifyToken(req, res, next);
+      await verifyToken(req as Request, res as Response, next);
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(401);
@@ -110,14 +124,14 @@ describe('AuthMiddleware', () => {
 
     test('zwraca 401 gdy token jest nieprawidłowy', async () => {
       // Arrange
-      req.headers.authorization = 'Bearer invalid-token';
+      req.headers = { authorization: 'Bearer invalid-token' };
       
-      jwt.verify.mockImplementation(() => {
+      (jwt.verify as jest.Mock).mockImplementation(() => {
         throw new Error('Invalid token');
       });
 
       // Act
-      await verifyToken(req, res, next);
+      await verifyToken(req as Request, res as Response, next);
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(401);
@@ -132,12 +146,12 @@ describe('AuthMiddleware', () => {
       const token = 'valid-token';
       const decodedToken = { id: 999 }; // nieistniejący użytkownik
       
-      req.headers.authorization = `Bearer ${token}`;
-      jwt.verify.mockReturnValue(decodedToken);
-      userRepository.findById.mockResolvedValue(null);
+      req.headers = { authorization: `Bearer ${token}` };
+      (jwt.verify as jest.Mock).mockReturnValue(decodedToken);
+      (userRepository.findById as jest.Mock).mockResolvedValue(null);
 
       // Act
-      await verifyToken(req, res, next);
+      await verifyToken(req as Request, res as Response, next);
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(401);
@@ -151,7 +165,7 @@ describe('AuthMiddleware', () => {
   describe('checkOrganizationAccess', () => {
     test('przepuszcza żądanie gdy nie podano organizationId', async () => {
       // Act
-      await checkOrganizationAccess(req, res, next);
+      await checkOrganizationAccess(req as Request, res as Response, next);
 
       // Assert
       expect(next).toHaveBeenCalled();
@@ -160,14 +174,14 @@ describe('AuthMiddleware', () => {
 
     test('przepuszcza żądanie gdy użytkownik ma dostęp do organizacji (z params)', async () => {
       // Arrange
-      req.params.organizationId = '5';
+      req.params = { organizationId: '5' };
       req.userOrganizations = [
         { id: 5, role: 'admin' },
         { id: 10, role: 'client' }
       ];
 
       // Act
-      await checkOrganizationAccess(req, res, next);
+      await checkOrganizationAccess(req as Request, res as Response, next);
 
       // Assert
       expect(next).toHaveBeenCalled();
@@ -177,14 +191,14 @@ describe('AuthMiddleware', () => {
 
     test('przepuszcza żądanie gdy użytkownik ma dostęp do organizacji (z query)', async () => {
       // Arrange
-      req.query.organizationId = '10';
+      req.query = { organizationId: '10' } as any;
       req.userOrganizations = [
         { id: 5, role: 'admin' },
         { id: 10, role: 'client' }
       ];
 
       // Act
-      await checkOrganizationAccess(req, res, next);
+      await checkOrganizationAccess(req as Request, res as Response, next);
 
       // Assert
       expect(next).toHaveBeenCalled();
@@ -193,13 +207,13 @@ describe('AuthMiddleware', () => {
 
     test('przepuszcza żądanie gdy użytkownik ma dostęp do organizacji (z body)', async () => {
       // Arrange
-      req.body.organizationId = 5;
+      req.body = { organizationId: 5 };
       req.userOrganizations = [
         { id: 5, role: 'admin' }
       ];
 
       // Act
-      await checkOrganizationAccess(req, res, next);
+      await checkOrganizationAccess(req as Request, res as Response, next);
 
       // Assert
       expect(next).toHaveBeenCalled();
@@ -208,11 +222,11 @@ describe('AuthMiddleware', () => {
 
     test('zwraca 403 gdy użytkownik nie ma organizacji', async () => {
       // Arrange
-      req.params.organizationId = '5';
+      req.params = { organizationId: '5' };
       req.userOrganizations = [];
 
       // Act
-      await checkOrganizationAccess(req, res, next);
+      await checkOrganizationAccess(req as Request, res as Response, next);
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(403);
@@ -225,14 +239,14 @@ describe('AuthMiddleware', () => {
 
     test('zwraca 403 gdy użytkownik nie ma dostępu do podanej organizacji', async () => {
       // Arrange
-      req.params.organizationId = '999';
+      req.params = { organizationId: '999' };
       req.userOrganizations = [
         { id: 5, role: 'admin' },
         { id: 10, role: 'client' }
       ];
 
       // Act
-      await checkOrganizationAccess(req, res, next);
+      await checkOrganizationAccess(req as Request, res as Response, next);
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(403);
@@ -244,14 +258,14 @@ describe('AuthMiddleware', () => {
 
     test('sprawdza uprawnienia dla ścieżek administracyjnych', async () => {
       // Arrange
-      req.params.organizationId = '5';
+      req.params = { organizationId: '5' };
       req.userOrganizations = [
         { id: 5, role: 'client' } // klient nie ma dostępu do admin
       ];
       req.path = '/admin/settings';
 
       // Act
-      await checkOrganizationAccess(req, res, next);
+      await checkOrganizationAccess(req as Request, res as Response, next);
 
       // Assert
       expect(res.status).toHaveBeenCalledWith(403);
@@ -263,14 +277,14 @@ describe('AuthMiddleware', () => {
 
     test('sprawdza uprawnienia dla ścieżek medycznych', async () => {
       // Arrange
-      req.params.organizationId = '5';
+      req.params = { organizationId: '5' };
       req.userOrganizations = [
         { id: 5, role: 'vet' } // weterynarz ma dostęp do medical
       ];
       req.path = '/medical/visit';
 
       // Act
-      await checkOrganizationAccess(req, res, next);
+      await checkOrganizationAccess(req as Request, res as Response, next);
 
       // Assert
       expect(next).toHaveBeenCalled();
@@ -279,15 +293,14 @@ describe('AuthMiddleware', () => {
 
     test('przepuszcza administratora dla wszystkich ścieżek', async () => {
       // Arrange
-      req.params.organizationId = '5';
+      req.params = { organizationId: '5' };
       req.userOrganizations = [
         { id: 5, role: 'admin' } // admin ma dostęp wszędzie
       ];
-      // Sprawdzamy ścieżkę adminowską
       req.path = '/admin/settings';
 
       // Act
-      await checkOrganizationAccess(req, res, next);
+      await checkOrganizationAccess(req as Request, res as Response, next);
 
       // Assert
       expect(next).toHaveBeenCalled();

@@ -1,13 +1,44 @@
-const animalController = require('../../../controllers/animalController');
-const animalService = require('../../../services/animalService');
-const { AppError } = require('../../../middleware/errorHandler');
-const { HTTP_STATUS, SEARCH, PAGINATION } = require('../../../config/constants');
+import * as animalController from '../../../controllers/animalController';
+import * as animalService from '../../../services/animalService';
+import { AppError } from '../../../middleware/errorHandler';
+import { HTTP_STATUS, SEARCH, PAGINATION } from '../../../config/constants';
+import { Request, Response, NextFunction } from 'express';
+
+// Importujemy lub definiujemy interfejs RequestWithUser
+interface RequestWithUser extends Request {
+  userId?: number;
+  organizationId?: number;
+  userRoleInOrg?: string;
+  userOrganizations?: Array<{ id: number; name: string; role: string }>;
+}
+
+// Interfejs dla mocka Response
+interface MockResponse extends Partial<Response> {
+  status: jest.Mock;
+  json: jest.Mock;
+}
+
+// Tworzymy interfejs dla mockowanych metod serwisu
+interface AnimalServiceMethods {
+  getAnimal: jest.Mock;
+  getOrganizationAnimals: jest.Mock;
+  searchAnimalsByOrganizationId: jest.Mock;
+  searchAnimalsByOwnerId: jest.Mock;
+  createAnimal: jest.Mock;
+  updateAnimal: jest.Mock;
+  deleteAnimal: jest.Mock;
+}
 
 // Mock serwisu zwierząt
 jest.mock('../../../services/animalService');
 
+// Rzutujemy mockowane serwisy do prawidłowego typu
+const mockedAnimalService = animalService as unknown as AnimalServiceMethods;
+
 describe('AnimalController', () => {
-  let req, res, next;
+  let req: Partial<RequestWithUser>;
+  let res: MockResponse;
+  let next: jest.Mock;
   
   // Przygotowanie wspólnych obiektów przed każdym testem
   beforeEach(() => {
@@ -19,7 +50,7 @@ describe('AnimalController', () => {
       userId: 10,
       organizationId: 5,
       userRoleInOrg: 'admin',
-      userOrganizations: [{ id: 5, name: 'Test Org' }]
+      userOrganizations: [{ id: 5, name: 'Test Org', role: 'admin' }]
     };
     
     res = {
@@ -37,14 +68,14 @@ describe('AnimalController', () => {
     test('zwraca zwierzę gdy zostało znalezione', async () => {
       // Arrange
       const mockAnimal = { id: 1, species: 'Cattle' };
-      req.params.id = 1;
-      animalService.getAnimal.mockResolvedValue(mockAnimal);
+      req.params = { id: '1' };
+      mockedAnimalService.getAnimal = jest.fn().mockResolvedValue(mockAnimal);
       
       // Act
-      await animalController.getAnimal(req, res, next);
+      await animalController.getAnimal(req as RequestWithUser, res as unknown as Response, next);
       
       // Assert
-      expect(animalService.getAnimal).toHaveBeenCalledWith(1);
+      expect(mockedAnimalService.getAnimal).toHaveBeenCalledWith(1);
       expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
       expect(res.json).toHaveBeenCalledWith({
         status: 'success',
@@ -56,11 +87,11 @@ describe('AnimalController', () => {
     test('przekazuje błąd dalej gdy zwierzę nie zostało znalezione', async () => {
       // Arrange
       const mockError = new AppError('Zwierzę nie znalezione', HTTP_STATUS.NOT_FOUND);
-      req.params.id = 999;
-      animalService.getAnimal.mockRejectedValue(mockError);
+      req.params = { id: '999' };
+      mockedAnimalService.getAnimal = jest.fn().mockRejectedValue(mockError);
       
       // Act
-      await animalController.getAnimal(req, res, next);
+      await animalController.getAnimal(req as RequestWithUser, res as unknown as Response, next);
       
       // Assert
       expect(next).toHaveBeenCalledWith(mockError);
@@ -81,14 +112,14 @@ describe('AnimalController', () => {
           totalPages: 1 
         }
       };
-      req.query = { page: 1, limit: 10 };
-      animalService.getOrganizationAnimals.mockResolvedValue(mockResult);
+      req.query = { page: '1', limit: '10' };
+      mockedAnimalService.getOrganizationAnimals = jest.fn().mockResolvedValue(mockResult);
       
       // Act
-      await animalController.getUserAnimals(req, res, next);
+      await animalController.getUserAnimals(req as RequestWithUser, res as unknown as Response, next);
       
       // Assert
-      expect(animalService.getOrganizationAnimals).toHaveBeenCalledWith(
+      expect(mockedAnimalService.getOrganizationAnimals).toHaveBeenCalledWith(
         5, 1, 10, undefined
       );
       expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
@@ -105,14 +136,14 @@ describe('AnimalController', () => {
         animals: [{ id: 1 }],
         pagination: { page: 1, limit: 10, totalCount: 1, totalPages: 1 }
       };
-      req.query = { search: 'krowa', page: 1, limit: 10 };
-      animalService.searchAnimalsByOrganizationId.mockResolvedValue(mockResult);
+      req.query = { search: 'krowa', page: '1', limit: '10' };
+      mockedAnimalService.searchAnimalsByOrganizationId = jest.fn().mockResolvedValue(mockResult);
       
       // Act
-      await animalController.getUserAnimals(req, res, next);
+      await animalController.getUserAnimals(req as RequestWithUser, res as unknown as Response, next);
       
       // Assert
-      expect(animalService.searchAnimalsByOrganizationId).toHaveBeenCalledWith(
+      expect(mockedAnimalService.searchAnimalsByOrganizationId).toHaveBeenCalledWith(
         'krowa', 5, undefined, 1, 10
       );
       expect(res.json).toHaveBeenCalledWith({
@@ -128,15 +159,15 @@ describe('AnimalController', () => {
         animals: [{ id: 1 }, { id: 2 }],
         pagination: { page: 1, limit: 10, totalCount: 2, totalPages: 1 }
       };
-      req.query = { search: 'kr', page: 1, limit: 10 }; // Za krótka fraza
-      animalService.getOrganizationAnimals.mockResolvedValue(mockResult);
+      req.query = { search: 'kr', page: '1', limit: '10' }; // Za krótka fraza
+      mockedAnimalService.getOrganizationAnimals = jest.fn().mockResolvedValue(mockResult);
       
       // Act
-      await animalController.getUserAnimals(req, res, next);
+      await animalController.getUserAnimals(req as RequestWithUser, res as unknown as Response, next);
       
       // Assert
-      expect(animalService.searchAnimalsByOrganizationId).not.toHaveBeenCalled();
-      expect(animalService.getOrganizationAnimals).toHaveBeenCalledWith(5, 1, 10, undefined);
+      expect(mockedAnimalService.searchAnimalsByOrganizationId).not.toHaveBeenCalled();
+      expect(mockedAnimalService.getOrganizationAnimals).toHaveBeenCalledWith(5, 1, 10, undefined);
     });
     
     test('używa searchAnimalsByOwnerId dla użytkownika z rolą client', async () => {
@@ -148,23 +179,23 @@ describe('AnimalController', () => {
         animals: [{ id: 1 }],
         pagination: { page: 1, limit: 10, totalCount: 1, totalPages: 1 }
       };
-      animalService.searchAnimalsByOwnerId.mockResolvedValue(mockResult);
+      mockedAnimalService.searchAnimalsByOwnerId = jest.fn().mockResolvedValue(mockResult);
       
       // Act
-      await animalController.getUserAnimals(req, res, next);
+      await animalController.getUserAnimals(req as RequestWithUser, res as unknown as Response, next);
       
       // Assert
-      expect(animalService.searchAnimalsByOwnerId).toHaveBeenCalledWith(
+      expect(mockedAnimalService.searchAnimalsByOwnerId).toHaveBeenCalledWith(
         'krowa', 10, undefined, 1, 10
       );
     });
     
     test('obsługuje błędy i zwraca pusty wynik', async () => {
       // Arrange
-      animalService.getOrganizationAnimals.mockRejectedValue(new Error('Test error'));
+      mockedAnimalService.getOrganizationAnimals = jest.fn().mockRejectedValue(new Error('Test error'));
       
       // Act
-      await animalController.getUserAnimals(req, res, next);
+      await animalController.getUserAnimals(req as RequestWithUser, res as unknown as Response, next);
       
       // Assert
       expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
@@ -182,7 +213,7 @@ describe('AnimalController', () => {
       req.userOrganizations = [];
       
       // Act
-      await animalController.getUserAnimals(req, res, next);
+      await animalController.getUserAnimals(req as RequestWithUser, res as unknown as Response, next);
       
       // Assert
       expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.BAD_REQUEST);
@@ -216,13 +247,13 @@ describe('AnimalController', () => {
         farm_animal: { identifier: 'PL123456789' }
       };
       
-      animalService.createAnimal.mockResolvedValue(createdAnimal);
+      mockedAnimalService.createAnimal = jest.fn().mockResolvedValue(createdAnimal);
       
       // Act
-      await animalController.createAnimal(req, res, next);
+      await animalController.createAnimal(req as RequestWithUser, res as unknown as Response, next);
       
       // Assert
-      expect(animalService.createAnimal).toHaveBeenCalledWith(
+      expect(mockedAnimalService.createAnimal).toHaveBeenCalledWith(
         expect.objectContaining({
           owner_id: 5,
           organization_id: 5,
@@ -254,13 +285,13 @@ describe('AnimalController', () => {
       req.userId = 10;
       
       const createdAnimal = { id: 1, ...animalData, owner_id: 10 };
-      animalService.createAnimal.mockResolvedValue(createdAnimal);
+      mockedAnimalService.createAnimal = jest.fn().mockResolvedValue(createdAnimal);
       
       // Act
-      await animalController.createAnimal(req, res, next);
+      await animalController.createAnimal(req as RequestWithUser, res as unknown as Response, next);
       
       // Assert
-      expect(animalService.createAnimal).toHaveBeenCalledWith(
+      expect(mockedAnimalService.createAnimal).toHaveBeenCalledWith(
         expect.objectContaining({
           owner_id: 10,
           species: 'Dog'
@@ -279,13 +310,13 @@ describe('AnimalController', () => {
       
       req.body = animalData;
       
-      animalService.createAnimal.mockResolvedValue({ id: 1 });
+      mockedAnimalService.createAnimal = jest.fn().mockResolvedValue({ id: 1 });
       
       // Act
-      await animalController.createAnimal(req, res, next);
+      await animalController.createAnimal(req as RequestWithUser, res as unknown as Response, next);
       
       // Assert
-      expect(animalService.createAnimal).toHaveBeenCalledWith(
+      expect(mockedAnimalService.createAnimal).toHaveBeenCalledWith(
         expect.objectContaining({
           farm_animal: expect.objectContaining({
             registration_date: '2025-01-15'
@@ -306,7 +337,7 @@ describe('AnimalController', () => {
         }
       };
       
-      req.params.id = animalId;
+      req.params = { id: '1' };
       req.body = updateData;
       req.userId = 10;
       
@@ -321,14 +352,14 @@ describe('AnimalController', () => {
         species: 'Updated Species'
       };
       
-      animalService.getAnimal.mockResolvedValue(existingAnimal);
-      animalService.updateAnimal.mockResolvedValue(updatedAnimal);
+      mockedAnimalService.getAnimal = jest.fn().mockResolvedValue(existingAnimal);
+      mockedAnimalService.updateAnimal = jest.fn().mockResolvedValue(updatedAnimal);
       
       // Act
-      await animalController.updateAnimal(req, res, next);
+      await animalController.updateAnimal(req as RequestWithUser, res as unknown as Response, next);
       
       // Assert
-      expect(animalService.updateAnimal).toHaveBeenCalledWith(
+      expect(mockedAnimalService.updateAnimal).toHaveBeenCalledWith(
         animalId,
         expect.objectContaining({
           species: 'Updated Species',
@@ -349,14 +380,14 @@ describe('AnimalController', () => {
     test('przekazuje błąd dalej gdy aktualizacja nie powiodła się', async () => {
       // Arrange
       const mockError = new AppError('Błąd aktualizacji', HTTP_STATUS.BAD_REQUEST);
-      req.params.id = 1;
+      req.params = { id: '1' };
       req.body = { species: 'Updated' };
       
-      animalService.getAnimal.mockResolvedValue({ id: 1, animal_type: 'farm' });
-      animalService.updateAnimal.mockRejectedValue(mockError);
+      mockedAnimalService.getAnimal = jest.fn().mockResolvedValue({ id: 1, animal_type: 'farm' });
+      mockedAnimalService.updateAnimal = jest.fn().mockRejectedValue(mockError);
       
       // Act
-      await animalController.updateAnimal(req, res, next);
+      await animalController.updateAnimal(req as RequestWithUser, res as unknown as Response, next);
       
       // Assert
       expect(next).toHaveBeenCalledWith(mockError);
@@ -368,17 +399,17 @@ describe('AnimalController', () => {
     test('usuwa zwierzę i zwraca komunikat sukcesu', async () => {
       // Arrange
       const animalId = 1;
-      req.params.id = animalId;
+      req.params = { id: '1' };
       
-      animalService.getAnimal.mockResolvedValue({ id: animalId });
-      animalService.deleteAnimal.mockResolvedValue(true);
+      mockedAnimalService.getAnimal = jest.fn().mockResolvedValue({ id: animalId });
+      mockedAnimalService.deleteAnimal = jest.fn().mockResolvedValue(true);
       
       // Act
-      await animalController.deleteAnimal(req, res, next);
+      await animalController.deleteAnimal(req as RequestWithUser, res as unknown as Response, next);
       
       // Assert
-      expect(animalService.getAnimal).toHaveBeenCalledWith(animalId);
-      expect(animalService.deleteAnimal).toHaveBeenCalledWith(animalId);
+      expect(mockedAnimalService.getAnimal).toHaveBeenCalledWith(animalId);
+      expect(mockedAnimalService.deleteAnimal).toHaveBeenCalledWith(animalId);
       expect(res.status).toHaveBeenCalledWith(HTTP_STATUS.OK);
       expect(res.json).toHaveBeenCalledWith({
         status: 'success',
