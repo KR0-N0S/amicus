@@ -1,5 +1,5 @@
 import axiosInstance from './axios';
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, CancelToken } from 'axios';
 import { ClientsResponse, ClientResponse, Client } from '../types/models';
 
 // Konfiguracja
@@ -10,15 +10,125 @@ const MIN_SEARCH_LENGTH = 3; // Minimalna długość frazy wyszukiwania
 const searchCache = new Map<string, {data: any, timestamp: number}>();
 const CACHE_TTL = 30000; // 30 sekund w milisekundach
 
-// ============= KLIENCI / ROLNICY =============
+/**
+ * Rozszerzona diagnostyka API
+ */
+const API_DEBUG = process.env.NODE_ENV === 'development';
 
-export const fetchClients = async (organizationId?: number): Promise<Client[]> => {
-  try {
-    const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
-    console.log(`Fetching clients with params: ${queryParams}`);
+/**
+ * Formatuje parametry zapytania zapewniając poprawną składnię dla API
+ * @param params Podstawowe parametry
+ * @param sortConfig Konfiguracja sortowania
+ * @returns Obiekt URLSearchParams
+ */
+const formatQueryParams = (
+  params: Record<string, any> = {}, 
+  sortConfig?: {column: string, direction: string}
+): URLSearchParams => {
+  const queryParams = new URLSearchParams();
+  
+  // Dodanie parametrów sortowania - używamy TYLKO jednego zestawu nazw parametrów
+  if (sortConfig?.column) {
+    // Używamy tylko podstawowych parametrów sort/order
+    queryParams.append('sort', sortConfig.column); 
+    queryParams.append('order', sortConfig.direction);
     
-    const response = await axiosInstance.get<ClientsResponse>(`/users/clients${queryParams}`);
-    console.log('API response:', response);
+    if (API_DEBUG) {
+      // Ograniczamy do jednego loga
+      if (process.env.NODE_ENV !== 'production') {
+        console.debug(`Applying sort: ${sortConfig.column} ${sortConfig.direction}`);
+      }
+    }
+  }
+  
+  // Dodaj pozostałe parametry
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      queryParams.append(key, String(value));
+    }
+  });
+  
+  return queryParams;
+};
+
+// Zmienne do śledzenia zapytań
+let activeRequestCounter = 0;
+let lastRequestParams = '';
+
+/**
+ * Pobiera listę klientów
+ * @param organizationId ID organizacji (opcjonalne)
+ * @param queryParams Dodatkowe parametry zapytania (opcjonalne)
+ * @param cancelToken Token anulowania żądania (opcjonalnie)
+ * @returns Lista klientów
+ */
+export const fetchClients = async (
+  organizationId?: number, 
+  queryParams?: Record<string, any>,
+  cancelToken?: CancelToken
+): Promise<Client[]> => {
+  try {
+    // Wydzielamy parametry sortowania z queryParams
+    const sortConfig = queryParams?.sort ? {
+      column: queryParams.sort,
+      direction: queryParams.order || 'asc'
+    } : undefined;
+    
+    // Budowanie parametrów URL z właściwym formatowaniem
+    const params: Record<string, any> = {};
+    
+    if (organizationId) {
+      params.organizationId = organizationId.toString();
+    }
+    
+    // Kopiujemy pozostałe parametry zapytania (z wyjątkiem sort i order, które już obsłużyliśmy)
+    if (queryParams) {
+      Object.entries(queryParams).forEach(([key, value]) => {
+        if (key !== 'sort' && key !== 'order') {
+          params[key] = value;
+        }
+      });
+    }
+    
+    // Formatujemy parametry zapytania
+    const formattedParams = formatQueryParams(params, sortConfig);
+    const queryString = formattedParams.toString() ? `?${formattedParams.toString()}` : '';
+    
+    // Śledzenie zapytań, aby uniknąć duplikacji
+    const requestKey = `/users/clients${queryString}`;
+    
+    // Sprawdzamy czy to duplikat ostatniego zapytania
+    if (requestKey === lastRequestParams && activeRequestCounter > 0) {
+      console.debug('Pomijam zduplikowane zapytanie:', requestKey);
+      
+      if (!cancelToken) {
+        // Tworzymy nowy token anulowania i anulujemy to zapytanie jako duplikat
+        const source = axios.CancelToken.source();
+        source.cancel('Duplicate request avoided');
+        return [];
+      }
+    }
+    
+    // Ustawiamy jako ostatnie zapytanie
+    lastRequestParams = requestKey;
+    activeRequestCounter++;
+    
+    if (API_DEBUG) {
+      console.debug(`Fetching clients with URL: ${requestKey}`);
+      if (sortConfig) {
+        console.debug(`Sort config:`, sortConfig);
+      }
+    }
+    
+    const response = await axiosInstance.get<ClientsResponse>(`/users/clients${queryString}`, { 
+      cancelToken 
+    });
+    
+    if (API_DEBUG) {
+      console.debug(`API response status: ${response.status}`);
+    }
+    
+    activeRequestCounter--;
     
     if (!response.data || !response.data.data || !response.data.data.clients) {
       console.error('Nieprawidłowa struktura odpowiedzi API:', response.data);
@@ -27,7 +137,15 @@ export const fetchClients = async (organizationId?: number): Promise<Client[]> =
     
     return response.data.data.clients;
   } catch (error) {
+    // Ignorujemy błędy spowodowane anulowaniem żądania
+    if (axios.isCancel(error)) {
+      console.log('Żądanie zostało anulowane:', error.message);
+      activeRequestCounter--;
+      return [];
+    }
+    
     console.error('Error fetching clients:', error);
+    activeRequestCounter--;
     throw error;
   }
 };
@@ -80,7 +198,10 @@ export const createClient = async (userData: Partial<Client>, organizationId?: n
       role: userData.has_farm ? 'farmer' : 'client',
       
       // Dodanie pola określającego organizację, do której należy dodać klienta
-      addToOrganizationId: organizationId
+      addToOrganizationId: organizationId,
+      
+      // Flaga pomijająca generowanie tokenów - optymalizacja
+      skipTokenGeneration: true
     };
     
     // Dodajemy dane organizacji, jeśli klient posiada firmę
@@ -98,9 +219,13 @@ export const createClient = async (userData: Partial<Client>, organizationId?: n
     // Dodajemy dane o stadzie, jeśli podano
     if (userData.has_farm) {
       registerData.herd = {
-        name: userData.farm_name || `Gospodarstwo ${userData.last_name}`,
+        // Zmieniona nazwa gospodarstwa - dodajemy imię i nazwisko
+        name: userData.farm_name || `Gospodarstwo ${userData.first_name} ${userData.last_name}`,
+        // KLUCZOWA ZMIANA: użycie poprawnej nazwy pola herd_id zamiast registration_number
+        herd_id: userData.herd_registration_number,
+        // Zachowujemy też poprzednią nazwę pola dla kompatybilności
         registration_number: userData.herd_registration_number,
-        evaluation_number: userData.herd_evaluation_number || null
+        eval_herd_no: userData.herd_evaluation_number || null
       };
     }
 
@@ -115,7 +240,7 @@ export const createClient = async (userData: Partial<Client>, organizationId?: n
       data: {
         user: Client;
         organization?: any;
-        token?: string; // Teraz token może być opcjonalny
+        token?: string;
       }
     }>('/auth/register', registerData);
     
@@ -243,7 +368,8 @@ export const createEmployee = async (employeeData: any, organizationId?: number)
       role: 'employee',
       password: generateTemporaryPassword(),
       preserveCurrentSession: true,
-      addToOrganizationId: organizationId
+      addToOrganizationId: organizationId,
+      skipTokenGeneration: true // Optymalizacja - nie generujemy tokenów
     };
 
     const response = await axiosInstance.post('/auth/register', registerData);
@@ -282,6 +408,70 @@ export const updateEmployee = async (employeeId: number, employeeData: any, orga
   }
 };
 
+/**
+ * Przypisuje tagi do wielu klientów jednocześnie
+ * @param clientIds Lista ID klientów
+ * @param tagIds Lista ID tagów
+ * @param organizationId ID organizacji (opcjonalnie)
+ * @return Promise z wynikiem operacji
+ */
+export const assignTagsToClients = async (
+  clientIds: number[], 
+  tagIds: number[],
+  organizationId?: number
+): Promise<any> => {
+  try {
+    // Optymalizacja: używamy filtrowania po stronie klienta, aby uniknąć niepotrzebnych operacji
+    if (clientIds.length === 0 || tagIds.length === 0) {
+      console.warn('assignTagsToClients: Brak klientów lub tagów do przypisania');
+      return { success: false, message: 'Brak klientów lub tagów do przypisania' };
+    }
+    
+    // Używamy API_DEBUG do logowania informacji diagnostycznych
+    if (API_DEBUG) {
+      console.debug(`Assigning tags to clients:`, {
+        clientIds,
+        tagIds,
+        organizationId
+      });
+    }
+    
+    // Tworzymy parametry zapytania
+    const queryParams = organizationId ? `?organizationId=${organizationId}` : '';
+    
+    // Logujemy użycie endpoint'u dla celów diagnostycznych
+    console.log(`Assigning tags to ${clientIds.length} clients, tags count: ${tagIds.length}`);
+    
+    // Używamy zoptymalizowanego formatu zapytania
+    const response = await measureResponseTime(
+      axiosInstance.post(`/users/clients/tags/batch${queryParams}`, {
+        client_ids: clientIds,
+        tag_ids: tagIds
+      }),
+      '/users/clients/tags/batch'
+    );
+    
+    // Logujemy sukces operacji
+    console.log('Tags assigned successfully:', response.data);
+    
+    return response.data;
+  } catch (error) {
+    // Szczegółowe logowanie błędów
+    console.error('Error assigning tags to clients:', error);
+    
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError;
+      console.error('Error response:', {
+        status: axiosError.response?.status,
+        data: axiosError.response?.data,
+        headers: axiosError.response?.headers
+      });
+    }
+    
+    throw error;
+  }
+};
+
 // ============= WYSZUKIWANIE KLIENTÓW =============
 
 /**
@@ -309,8 +499,25 @@ const measureResponseTime = async <T>(
  * Funkcja do generowania klucza cache
  * @private
  */
-const generateCacheKey = (searchTerm: string, roles: string[], organizationId?: number, page?: number): string => {
-  return `search:${searchTerm}:${roles.join(',')}:${organizationId || 'no-org'}:page${page || 1}`;
+const generateCacheKey = (
+  searchTerm: string, 
+  roles: string[], 
+  page: number = 1, 
+  limit: number = ITEMS_PER_PAGE,
+  sortConfig?: {column: string, direction: string},
+  organizationId?: number
+): string => {
+  let key = `search:${searchTerm}:${roles.join(',')}:page${page}:limit${limit}`;
+  
+  if (organizationId) {
+    key += `:org${organizationId}`;
+  }
+  
+  if (sortConfig?.column) {
+    key += `:sort${sortConfig.column}:dir${sortConfig.direction}`;
+  }
+  
+  return key;
 };
 
 /**
@@ -321,6 +528,8 @@ const generateCacheKey = (searchTerm: string, roles: string[], organizationId?: 
  * @param organizationId ID organizacji
  * @param page Numer strony (dla paginacji)
  * @param limit Liczba wyników na stronę
+ * @param additionalParams Dodatkowe parametry wyszukiwania (sortowanie, filtrowanie)
+ * @param cancelToken Token anulowania żądania (opcjonalnie)
  * @returns Obiekt z klientami i informacjami o paginacji
  */
 export const searchClients = async (
@@ -328,7 +537,9 @@ export const searchClients = async (
   roles: string[] = ['client', 'farmer'], 
   organizationId?: number,
   page: number = 1,
-  limit: number = ITEMS_PER_PAGE
+  limit: number = ITEMS_PER_PAGE,
+  additionalParams?: Record<string, any>,
+  cancelToken?: CancelToken
 ) => {
   try {
     // Walidacja i czyszczenie frazy wyszukiwania
@@ -351,46 +562,101 @@ export const searchClients = async (
       };
     }
 
-    // Sprawdzenie cache
-    const cacheKey = generateCacheKey(trimmedSearchTerm, roles, organizationId, page);
-    const cachedResponse = searchCache.get(cacheKey);
+    // Wydzielamy parametry sortowania
+    const sortConfig = additionalParams?.sort ? {
+      column: additionalParams.sort,
+      direction: additionalParams.order || 'asc'
+    } : undefined;
+
+    // Generujemy klucz cache
+    const cacheKey = generateCacheKey(
+      trimmedSearchTerm,
+      roles,
+      page,
+      limit,
+      sortConfig,
+      organizationId
+    );
     
-    if (cachedResponse && (Date.now() - cachedResponse.timestamp < CACHE_TTL)) {
-      console.log(`Using cached response for search "${trimmedSearchTerm}" (page ${page})`);
-      return cachedResponse.data;
+    // Używamy cache tylko jeśli nie ma tokenu anulowania
+    if (!cancelToken) {
+      const cachedResponse = searchCache.get(cacheKey);
+      if (cachedResponse && (Date.now() - cachedResponse.timestamp < CACHE_TTL)) {
+        console.log(`Using cached response for search "${trimmedSearchTerm}" (page ${page})`);
+        return cachedResponse.data;
+      }
     }
 
-    // Przygotowanie parametrów zapytania
-    const queryParams = new URLSearchParams({
+    // Przygotowanie podstawowych parametrów
+    const params: Record<string, any> = {
       query: trimmedSearchTerm,
       roles: roles.join(','),
       page: page.toString(),
       limit: limit.toString()
-    });
+    };
     
     if (organizationId) {
-      queryParams.append('organizationId', organizationId.toString());
+      params.organizationId = organizationId.toString();
     }
     
-    console.log(`Searching clients with query: "${trimmedSearchTerm}", roles: ${roles.join(',')}, page: ${page}, limit: ${limit}`);
+    // Kopiujemy pozostałe dodatkowe parametry (z wyjątkiem sort i order)
+    if (additionalParams) {
+      Object.entries(additionalParams).forEach(([key, value]) => {
+        if (key !== 'sort' && key !== 'order') {
+          params[key] = value;
+        }
+      });
+    }
+    
+    // Formatujemy parametry
+    const formattedParams = formatQueryParams(params, sortConfig);
+    const queryString = `?${formattedParams.toString()}`;
+    
+    if (API_DEBUG) {
+      console.debug(`Searching clients with URL: /users/search${queryString}`);
+      console.debug(`Sort config:`, sortConfig);
+    }
     
     // Wykonanie zapytania z pomiarem czasu
-    const endpoint = `/users/search?${queryParams}`;
+    const endpoint = `/users/search${queryString}`;
     const response = await measureResponseTime(
-      axiosInstance.get(endpoint),
+      axiosInstance.get(endpoint, { cancelToken }),
       endpoint
     );
     
-    console.log(`Search API response: Found ${response.data.results} clients, total: ${response.data.data?.pagination?.total || 0}`);
+    if (API_DEBUG) {
+      console.debug(`Search API response status: ${response.status}`);
+      console.debug(`Found ${response.data.results || 0} clients`);
+    }
     
-    // Zapisanie wyników do cache
-    searchCache.set(cacheKey, {
-      data: response.data,
-      timestamp: Date.now()
-    });
+    // Zapisanie wyników do cache (tylko jeśli nie było tokenu anulowania)
+    if (!cancelToken) {
+      searchCache.set(cacheKey, {
+        data: response.data,
+        timestamp: Date.now()
+      });
+    }
     
     return response.data;
   } catch (error) {
+    // Ignorujemy błędy spowodowane anulowaniem żądania
+    if (axios.isCancel(error)) {
+      console.log('Żądanie wyszukiwania zostało anulowane:', error.message);
+      return { 
+        status: 'cancelled',
+        message: 'Żądanie zostało anulowane',
+        data: { 
+          clients: [],
+          pagination: {
+            total: 0,
+            limit: limit,
+            offset: (page - 1) * limit,
+            pages: 0
+          }
+        }
+      };
+    }
+    
     console.error('Error searching clients:', error);
     
     // W przypadku błędu zwracamy pusty wynik

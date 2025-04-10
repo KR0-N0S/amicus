@@ -1,0 +1,268 @@
+.clients-list {
+  padding-bottom: 2rem;
+}
+
+.clients-list .page-title {
+  margin-bottom: 1.5rem;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Card title */
+.card-title-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-title-text {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+/* Search and filters */
+.search-and-actions {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.search-container {
+  flex: 1;
+  max-width: 420px;
+  margin-right: 1rem;
+}
+
+.search-icon {
+  color: var(--text-secondary);
+}
+
+.action-buttons {
+  display: flex;
+  align-items: center;
+}
+
+.action-button {
+  margin: 0 0.25rem;
+}
+
+.add-button {
+  margin-left: 0.75rem;
+}
+
+.icon-button-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background-color: var(--primary-color);
+  color: #fff;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  font-size: 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+/* Filters panel */
+.filters-panel {
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+}
+
+.active-filters-indicator {
+  margin-bottom: 1rem;
+  padding: 0.5rem 0.75rem;
+  background-color: rgba(var(--primary-color-rgb), 0.08);
+  border-radius: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Table container */
+.table-responsive {
+  position: relative;
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* Loading overlay */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.loading-spinner {
+  padding: 1rem 2rem;
+  background-color: #fff;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  font-weight: 500;
+}
+
+/* Error message */
+.error-message {
+  padding: 2rem;
+  text-align: center;
+  color: var(--danger-color);
+  font-weight: 500;
+}
+
+/* Empty message */
+.empty-message {
+  padding: 3rem 2rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-style: italic;
+}
+
+/* Pagination */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1.5rem;
+  gap: 1rem;
+}
+
+.pagination-button {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.25rem;
+  background-color: #fff;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.pagination-button:hover:not(:disabled) {
+  background-color: rgba(var(--primary-color-rgb), 0.08);
+}
+
+.pagination-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-info {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* Views menu */
+.view-item {
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  margin-bottom: 0.25rem;
+  transition: background-color 0.2s;
+}
+
+.view-item:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.view-item.active {
+  background-color: rgba(var(--primary-color-rgb), 0.08);
+}
+
+.view-item-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.delete-view-button {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.view-item:hover .delete-view-button {
+  opacity: 1;
+}
+
+.save-view-form {
+  margin-top: 0.5rem;
+}
+
+/* Column toggle */
+.column-toggle-item {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.column-toggle-item:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+/* Client tags */
+.client-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.client-tag-chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.more-tags-chip {
+  background-color: rgba(0, 0, 0, 0.08);
+  font-size: 0.65rem;
+}
+
+/* Action buttons in table */
+.action-buttons {
+  display: flex;
+  gap: 0.25rem;
+  justify-content: flex-end;
+}
+
+.action-icon-button {
+  padding: 0.25rem;
+}
+
+/* Mobile layout */
+@media (max-width: 768px) {
+  .search-and-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .search-container {
+    max-width: 100%;
+    margin-right: 0;
+    margin-bottom: 0.75rem;
+  }
+  
+  .action-buttons {
+    justify-content: space-between;
+  }
+  
+  .pagination {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}

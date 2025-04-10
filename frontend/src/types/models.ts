@@ -53,6 +53,7 @@ export interface UserWithDetails extends User {
 }
 
 // Rozszerzony interfejs klienta z dodatkowymi polami formularza
+// Rozszerzony interfejs klienta z dodatkowymi polami formularza
 export interface Client extends UserWithDetails {
   // Pola dla formularza dotyczące firmy
   has_company?: boolean;
@@ -68,6 +69,12 @@ export interface Client extends UserWithDetails {
   farm_name?: string;
   herd_registration_number?: string;
   herd_evaluation_number?: string;
+
+  // Dodane pola używane w komponentach
+  orders_count?: number;
+  orders_value?: number;
+  last_activity?: string;
+  [key: string]: any; // Umożliwia dynamiczny dostęp do właściwości
 }
 
 // Zaktualizowany interfejs FarmAnimal z dodanym polem additional_id

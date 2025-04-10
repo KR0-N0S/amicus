@@ -5,6 +5,7 @@ import { AppError } from '../middleware/errorHandler';
 import { Roles } from '../constants/roles';
 import { RequestWithUser, ControllerFunction } from '../types/express';
 import { User } from '../types/models/user';
+import { SortOptions } from '../types/common';
 
 // Helper do usuwania hasła z obiektu użytkownika
 const excludePassword = (user: User | null): Omit<User, 'password'> | null => {
@@ -12,6 +13,13 @@ const excludePassword = (user: User | null): Omit<User, 'password'> | null => {
   const { password, ...userWithoutPassword } = user;
   return userWithoutPassword;
 };
+
+// Dozwolone kolumny do sortowania
+const ALLOWED_SORT_COLUMNS = [
+  'first_name', 'last_name', 'name', // 'name' zostanie przekształcone na sortowanie po concat(first_name, last_name)
+  'email', 'phone', 'city', 'street', 'address', // 'address' zostanie przekształcone na sortowanie po concat(city, street)
+  'organization', 'status', 'created_at', 'updated_at'
+];
 
 // Pobranie listy klientów w zależności od roli użytkownika
 export const getClients: ControllerFunction = async (
@@ -24,6 +32,30 @@ export const getClients: ControllerFunction = async (
     
     if (!userId || !user) {
       throw new AppError('User ID or user object is missing', 400);
+    }
+    
+    // Pobieranie parametrów sortowania
+    const sortColumn = req.query.sort as string | undefined;
+    const sortDirection = req.query.order as 'asc' | 'desc' | undefined;
+    
+    // Przygotowanie opcji sortowania z walidacją
+    let sortOptions: SortOptions | undefined;
+    
+    if (sortColumn) {
+      // Walidacja kolumny sortowania
+      const validSortColumn = ALLOWED_SORT_COLUMNS.includes(sortColumn) ? sortColumn : 'last_name';
+      
+      // Walidacja kierunku sortowania
+      const validSortDirection = sortDirection === 'asc' || sortDirection === 'desc' 
+        ? sortDirection 
+        : 'asc';
+      
+      sortOptions = {
+        column: validSortColumn,
+        direction: validSortDirection
+      };
+      
+      console.log(`[CLIENT_CONTROLLER] Sortowanie: ${sortOptions.column} ${sortOptions.direction}`);
     }
     
     // Naprawione operatory logiczne z użyciem nawiasów
@@ -50,29 +82,30 @@ export const getClients: ControllerFunction = async (
     // Owner widzi wszystkich w swojej organizacji
     if (userRoleInOrg === 'owner' && organizationId) {
       console.log(`[CLIENT_CONTROLLER] Pobieranie wszystkich użytkowników dla właściciela organizacji ${organizationId}`);
-      clients = await (userRepository as any).getUsersByOrganization(organizationId);
+      clients = await userRepository.getUsersByOrganization(organizationId, sortOptions);
       console.log(`[CLIENT_CONTROLLER] Pobrano ${clients.length} użytkowników dla organizacji ${organizationId}`);
     }
     // SuperAdmin widzi wszystkich użytkowników
     else if (userRoleInOrg === 'superadmin') {
-      clients = await (userRepository as any).getAllUsers();
+      clients = await userRepository.getAllUsers(sortOptions);
     }
     // Employee, OfficeStaff itp. widzą wszystkich klientów (ale nie innych pracowników i właściciela)
     else if (['employee', 'officestaff', 'inseminator', 'vettech', 'vet'].includes(userRoleInOrg || '') && organizationId) {
-      clients = await (userRepository as any).getClientsInOrganization(
+      clients = await userRepository.getClientsInOrganization(
         organizationId, 
-        ['owner', 'employee', 'superadmin', 'officestaff', 'inseminator', 'vettech', 'vet']
+        ['owner', 'employee', 'superadmin', 'officestaff', 'inseminator', 'vettech', 'vet'],
+        sortOptions
       );
     }
     // Client, Farmer widzą tylko siebie
     else if (['client', 'farmer'].includes(userRoleInOrg || '')) {
-      const singleUser = await (userRepository as any).getSingleUser(userId);
+      const singleUser = await userRepository.getSingleUser(userId);
       clients = singleUser ? [singleUser] : [];
     }
     // Domyślnie - jeśli nie znamy roli lub nie ma organizacji, użytkownik widzi tylko siebie
     else {
       console.log(`[CLIENT_CONTROLLER] Nieznana rola lub brak organizacji, zwracam tylko użytkownika ${userId}`);
-      const singleUser = await (userRepository as any).getSingleUser(userId);
+      const singleUser = await userRepository.getSingleUser(userId);
       clients = singleUser ? [singleUser] : [];
     }
     
@@ -156,7 +189,7 @@ export const getClientById: ControllerFunction = async (
     else if (['employee', 'officestaff', 'inseminator', 'vettech', 'vet'].includes(userRoleInOrg)) {
       try {
         // Dodajemy obsługę błędu przy pobieraniu roli klienta
-        const clientRole = await (organizationRepository as any).getUserRole(organizationId, clientId);
+        const clientRole = await organizationRepository.getUserRoleInOrganization(organizationId, clientId);
         const clientRoleLower = clientRole ? clientRole.toLowerCase() : null;
         
         console.log(`[CLIENT_CONTROLLER] Rola oglądanego klienta ${clientId}: ${clientRoleLower}`);
@@ -193,7 +226,7 @@ export const getClientById: ControllerFunction = async (
     // Pobierz dane klienta
     try {
       console.log(`[CLIENT_CONTROLLER] Pobieranie danych klienta ${clientId}`);
-      const client = await (userRepository as any).getSingleUser(clientId);
+      const client = await userRepository.getSingleUser(clientId);
       
       if (!client) {
         console.log(`[CLIENT_CONTROLLER] Nie znaleziono klienta o ID ${clientId}`);
@@ -234,10 +267,10 @@ export const updateClient: ControllerFunction = async (
     }
     
     const clientId = parseInt(req.params.clientId);
-const organizationId: number | undefined = 
-  (req.query.organizationId ? parseInt(req.query.organizationId as string) : undefined) || 
-  (req.params.organizationId ? parseInt(req.params.organizationId as string) : undefined) || 
-  (user.organizations && user.organizations.length > 0 ? parseInt(user.organizations[0].id.toString()) : undefined);
+    const organizationId: number | undefined = 
+      (req.query.organizationId ? parseInt(req.query.organizationId as string) : undefined) || 
+      (req.params.organizationId ? parseInt(req.params.organizationId as string) : undefined) || 
+      (user.organizations && user.organizations.length > 0 ? parseInt(user.organizations[0].id.toString()) : undefined);
     
     console.log(`[CLIENT_CONTROLLER] Aktualizacja klienta ID ${clientId} dla użytkownika ${userId}, organizacja: ${organizationId}`);
     
@@ -290,7 +323,7 @@ const organizationId: number | undefined =
     }
     
     // Pobierz dane klienta aby sprawdzić czy istnieje
-    const existingClient = await (userRepository as any).getSingleUser(clientId);
+    const existingClient = await userRepository.getSingleUser(clientId);
     
     if (!existingClient) {
       console.log(`[CLIENT_CONTROLLER] Nie znaleziono klienta o ID ${clientId}`);
@@ -326,7 +359,7 @@ const organizationId: number | undefined =
     }
     
     console.log(`[CLIENT_CONTROLLER] Aktualizacja danych klienta ${clientId}`);
-    const updatedClient = await (userRepository as any).updateUser(clientId, updateData);
+    const updatedClient = await userRepository.updateUser(clientId, updateData);
     
     console.log(`[CLIENT_CONTROLLER] Sukces: Zaktualizowano dane klienta ${clientId}`);
     res.status(200).json({
@@ -341,116 +374,7 @@ const organizationId: number | undefined =
   }
 };
 
-// Zmieniona funkcja deactivateClient - teraz usuwa powiązanie zamiast dezaktywacji konta
-export const deactivateClient: ControllerFunction = async (
-  req: RequestWithUser,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const { userId, user } = req;
-    
-    if (!userId || !user) {
-      throw new AppError('User ID or user object is missing', 400);
-    }
-    
-    const clientId = parseInt(req.params.clientId);
-    const organizationId: number | undefined = 
-  (req.query.organizationId ? parseInt(req.query.organizationId as string) : undefined) || 
-  (req.params.organizationId ? parseInt(req.params.organizationId as string) : undefined) || 
-  (user.organizations && user.organizations.length > 0 ? parseInt(user.organizations[0].id.toString()) : undefined);
-    
-    console.log(`[CLIENT_CONTROLLER] Próba usunięcia powiązania klienta ID ${clientId} z organizacją ${organizationId} przez użytkownika ${userId}`);
-    
-    if (!organizationId) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Nie podano identyfikatora organizacji'
-      });
-    }
-    
-    // Sprawdź rolę użytkownika w organizacji
-    let userRoleInOrg: string | null = null;
-    if (user.organizations) {
-      const userOrg = user.organizations.find(org => org.id && org.id.toString() === organizationId.toString());
-      if (userOrg) {
-        userRoleInOrg = userOrg.role ? userOrg.role.toLowerCase() : null;
-        console.log(`[CLIENT_CONTROLLER] Rola użytkownika ${userId} w organizacji ${organizationId}: ${userRoleInOrg}`);
-      }
-    }
-    
-    // Tylko owner i officestaff mogą usuwać powiązania klientów
-    if (!userRoleInOrg || !['owner', 'officestaff'].includes(userRoleInOrg)) {
-      console.log(`[CLIENT_CONTROLLER] Odmowa dostępu: użytkownik ${userId} (rola: ${userRoleInOrg}) próbował usunąć powiązanie klienta ${clientId}`);
-      return res.status(403).json({
-        status: 'error',
-        message: 'Brak uprawnień do usunięcia powiązania klienta z organizacją'
-      });
-    }
-    
-    // Sprawdź czy klient istnieje i czy należy do organizacji
-    const client = await (userRepository as any).getSingleUser(clientId);
-    
-    if (!client) {
-      console.log(`[CLIENT_CONTROLLER] Nie znaleziono klienta o ID ${clientId}`);
-      return res.status(404).json({
-        status: 'error',
-        message: 'Klient nie został znaleziony'
-      });
-    }
-    
-    // Sprawdź czy klient należy do organizacji
-    const belongsToOrg = client.organizations && client.organizations.some(org => 
-      org.id && org.id.toString() === organizationId.toString()
-    );
-    
-    if (!belongsToOrg) {
-      console.log(`[CLIENT_CONTROLLER] Klient ${clientId} nie należy do organizacji ${organizationId}`);
-      return res.status(403).json({
-        status: 'error',
-        message: 'Klient nie należy do podanej organizacji'
-      });
-    }
-    
-    // Sprawdź czy klient nie jest właścicielem organizacji (nie można usunąć ownera)
-    const clientRoleInOrg = client.organizations.find(org => 
-      org.id && org.id.toString() === organizationId.toString()
-    )?.role?.toLowerCase();
-    
-    if (clientRoleInOrg === 'owner' && userRoleInOrg !== 'superadmin') {
-      console.log(`[CLIENT_CONTROLLER] Nie można usunąć powiązania właściciela organizacji`);
-      return res.status(403).json({
-        status: 'error',
-        message: 'Nie można usunąć powiązania właściciela organizacji'
-      });
-    }
-    
-    // Właściciel nie może usunąć sam siebie
-    if (userId.toString() === clientId.toString() && clientRoleInOrg === 'owner') {
-      console.log(`[CLIENT_CONTROLLER] Właściciel nie może usunąć sam siebie z organizacji`);
-      return res.status(403).json({
-        status: 'error',
-        message: 'Właściciel nie może usunąć sam siebie z organizacji'
-      });
-    }
-    
-    // Usuwamy powiązanie zamiast dezaktywacji konta
-    await (organizationRepository as any).removeUserFromOrganization(organizationId, clientId);
-    
-    console.log(`[CLIENT_CONTROLLER] Powiązanie klienta ${clientId} z organizacją ${organizationId} zostało pomyślnie usunięte`);
-    
-    res.status(200).json({
-      status: 'success',
-      message: 'Powiązanie klienta z organizacją zostało pomyślnie usunięte'
-    });
-    
-  } catch (error) {
-    console.error('[CLIENT_CONTROLLER] Error:', error);
-    next(new AppError('Wystąpił błąd podczas usuwania powiązania klienta z organizacją', 500));
-  }
-};
-
-// Funkcja do wyszukiwania klientów z obsługą literówek
+// Funkcja do wyszukiwania klientów z obsługą literówek i sortowania
 export const searchClients: ControllerFunction = async (
   req: RequestWithUser,
   res: Response,
@@ -469,10 +393,34 @@ export const searchClients: ControllerFunction = async (
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = (page - 1) * limit;
     
+    // Pobieranie parametrów sortowania
+    const sortColumn = req.query.sort as string | undefined;
+    const sortDirection = req.query.order as 'asc' | 'desc' | undefined;
+    
+    // Przygotowanie opcji sortowania z walidacją
+    let sortOptions: SortOptions | undefined;
+    
+    if (sortColumn) {
+      // Walidacja kolumny sortowania
+      const validSortColumn = ALLOWED_SORT_COLUMNS.includes(sortColumn) ? sortColumn : 'last_name';
+      
+      // Walidacja kierunku sortowania
+      const validSortDirection = sortDirection === 'asc' || sortDirection === 'desc' 
+        ? sortDirection 
+        : 'asc';
+      
+      sortOptions = {
+        column: validSortColumn,
+        direction: validSortDirection
+      };
+      
+      console.log(`[CLIENT_CONTROLLER] Wyszukiwanie z sortowaniem: ${sortOptions.column} ${sortOptions.direction}`);
+    }
+    
     const organizationId: number | undefined = 
-  (req.query.organizationId ? parseInt(req.query.organizationId as string) : undefined) || 
-  (req.params.organizationId ? parseInt(req.params.organizationId as string) : undefined) || 
-  (user.organizations && user.organizations.length > 0 ? parseInt(user.organizations[0].id.toString()) : undefined);
+      (req.query.organizationId ? parseInt(req.query.organizationId as string) : undefined) || 
+      (req.params.organizationId ? parseInt(req.params.organizationId as string) : undefined) || 
+      (user.organizations && user.organizations.length > 0 ? parseInt(user.organizations[0].id.toString()) : undefined);
     
     console.log(`[CLIENT_CONTROLLER] Wyszukiwanie klientów dla użytkownika ${userId}, fraza: "${query}", role: ${roles}, organizacja: ${organizationId}`);
     
@@ -525,7 +473,7 @@ export const searchClients: ControllerFunction = async (
       )) {
         console.log(`[CLIENT_CONTROLLER] Klient/rolnik ${userId} wyszukuje samego siebie`);
         
-        const singleUser = await (userRepository as any).getSingleUser(userId);
+        const singleUser = await userRepository.getSingleUser(userId);
         const usersWithoutPassword = singleUser ? [excludePassword(singleUser)].filter(Boolean) : [];
         
         return res.status(200).json({
@@ -569,16 +517,17 @@ export const searchClients: ControllerFunction = async (
       });
     }
     
-    // Wykonaj wyszukiwanie z nową funkcją
+    // Wykonaj wyszukiwanie z nowymi opcjami sortowania
     console.log(`[CLIENT_CONTROLLER] Wykonuję wyszukiwanie z parametrami: query=${query}, roles=${allowedRolesToSearch.join(',')}`);
     
     try {
-      const result = await (userRepository as any).searchUsers(
+      const result = await userRepository.searchUsers(
         query, 
         allowedRolesToSearch, 
         organizationId,
         limit,
-        offset
+        offset,
+        sortOptions
       );
       
       // Usuń hasła z wyników
@@ -608,5 +557,116 @@ export const searchClients: ControllerFunction = async (
   } catch (error) {
     console.error('[CLIENT_CONTROLLER] Error:', error);
     next(new AppError('Wystąpił błąd podczas wyszukiwania klientów', 500));
+  }
+};
+
+// Zmieniona funkcja deactivateClient - poprawiona obsługa organizacji
+export const deactivateClient: ControllerFunction = async (
+  req: RequestWithUser,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { userId, user } = req;
+    
+    if (!userId || !user) {
+      throw new AppError('User ID or user object is missing', 400);
+    }
+    
+    const clientId = parseInt(req.params.clientId);
+    const organizationId: number | undefined = 
+      (req.query.organizationId ? parseInt(req.query.organizationId as string) : undefined) || 
+      (req.params.organizationId ? parseInt(req.params.organizationId as string) : undefined) || 
+      (user.organizations && user.organizations.length > 0 ? parseInt(user.organizations[0].id.toString()) : undefined);
+    
+    console.log(`[CLIENT_CONTROLLER] Próba usunięcia powiązania klienta ID ${clientId} z organizacją ${organizationId} przez użytkownika ${userId}`);
+    
+    if (!organizationId) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Nie podano identyfikatora organizacji'
+      });
+    }
+    
+    // Sprawdź rolę użytkownika w organizacji
+    let userRoleInOrg: string | null = null;
+    if (user.organizations) {
+      const userOrg = user.organizations.find(org => org.id && org.id.toString() === organizationId.toString());
+      if (userOrg) {
+        userRoleInOrg = userOrg.role ? userOrg.role.toLowerCase() : null;
+        console.log(`[CLIENT_CONTROLLER] Rola użytkownika ${userId} w organizacji ${organizationId}: ${userRoleInOrg}`);
+      }
+    }
+    
+    // Tylko owner i officestaff mogą usuwać powiązania klientów
+    if (!userRoleInOrg || !['owner', 'officestaff'].includes(userRoleInOrg)) {
+      console.log(`[CLIENT_CONTROLLER] Odmowa dostępu: użytkownik ${userId} (rola: ${userRoleInOrg}) próbował usunąć powiązanie klienta ${clientId}`);
+      return res.status(403).json({
+        status: 'error',
+        message: 'Brak uprawnień do usunięcia powiązania klienta z organizacją'
+      });
+    }
+    
+    // Sprawdź czy klient istnieje i czy należy do organizacji
+    const client = await userRepository.getSingleUser(clientId);
+    
+    if (!client) {
+      console.log(`[CLIENT_CONTROLLER] Nie znaleziono klienta o ID ${clientId}`);
+      return res.status(404).json({
+        status: 'error',
+        message: 'Klient nie został znaleziony'
+      });
+    }
+    
+    // Sprawdź czy klient należy do organizacji - poprawiona obsługa undefined
+    const belongsToOrg = client.organizations ? client.organizations.some(org => 
+      org.id && org.id.toString() === organizationId.toString()
+    ) : false;
+    
+    if (!belongsToOrg) {
+      console.log(`[CLIENT_CONTROLLER] Klient ${clientId} nie należy do organizacji ${organizationId}`);
+      return res.status(403).json({
+        status: 'error',
+        message: 'Klient nie należy do podanej organizacji'
+      });
+    }
+    
+    // Sprawdź czy klient nie jest właścicielem organizacji (nie można usunąć ownera) - poprawiona obsługa undefined
+    const clientOrg = client.organizations ? client.organizations.find(org => 
+      org.id && org.id.toString() === organizationId.toString()
+    ) : undefined;
+    
+    const clientRoleInOrg = clientOrg?.role?.toLowerCase();
+    
+    if (clientRoleInOrg === 'owner' && userRoleInOrg !== 'superadmin') {
+      console.log(`[CLIENT_CONTROLLER] Nie można usunąć powiązania właściciela organizacji`);
+      return res.status(403).json({
+        status: 'error',
+        message: 'Nie można usunąć powiązania właściciela organizacji'
+      });
+    }
+    
+    // Właściciel nie może usunąć sam siebie
+    if (userId.toString() === clientId.toString() && clientRoleInOrg === 'owner') {
+      console.log(`[CLIENT_CONTROLLER] Właściciel nie może usunąć sam siebie z organizacji`);
+      return res.status(403).json({
+        status: 'error',
+        message: 'Właściciel nie może usunąć sam siebie z organizacji'
+      });
+    }
+    
+    // Usuwamy powiązanie zamiast dezaktywacji konta
+    await organizationRepository.removeUserFromOrganization(organizationId, clientId);
+    
+    console.log(`[CLIENT_CONTROLLER] Powiązanie klienta ${clientId} z organizacją ${organizationId} zostało pomyślnie usunięte`);
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Powiązanie klienta z organizacją zostało pomyślnie usunięte'
+    });
+    
+  } catch (error) {
+    console.error('[CLIENT_CONTROLLER] Error:', error);
+    next(new AppError('Wystąpił błąd podczas usuwania powiązania klienta z organizacją', 500));
   }
 };

@@ -1,9 +1,9 @@
 .table-container {
-  background-color: var(--card-bg);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
+  background-color: #ffffff;
+  border-radius: 4px;
   overflow: hidden;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
+  width: 100%;
 }
 
 .data-table {
@@ -12,18 +12,19 @@
 }
 
 .data-table th, .data-table td {
-  padding: 1rem;
+  padding: 0.875rem 1rem;
   text-align: left;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid #eaeaea;
 }
 
 .data-table th {
-  background-color: rgba(var(--secondary-color-rgb), 0.05);
+  background-color: #f9f9f9;
   font-weight: 600;
-  color: var(--secondary-color);
+  color: #555;
   position: sticky;
   top: 0;
   z-index: 10;
+  white-space: nowrap;
 }
 
 .data-table tbody tr:last-child td {
@@ -31,17 +32,53 @@
 }
 
 .data-table tbody tr:hover {
-  background-color: rgba(var(--primary-color-rgb), 0.05);
+  background-color: rgba(33, 150, 243, 0.05);
 }
 
-.sortable {
+/* Ulepszenia dla sortowania w tabeli */
+.sortable .th-content {
   cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-radius: 3px;
+}
+
+.sortable .th-content:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.sortable .th-content:active {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.th-content:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.4) inset;
 }
 
 .sort-icon {
   display: inline-flex;
   align-items: center;
   margin-left: 0.5rem;
+  transition: transform 0.2s;
+}
+
+/* Wizualne wskazanie aktywnego sortowania */
+th.active-sort {
+  background-color: rgba(33, 150, 243, 0.08);
+}
+
+th.active-sort .th-content {
+  font-weight: 600;
+}
+
+/* Wyraźniejsza reakcja na kliknięcie */
+.sortable .th-content:active .sort-icon {
+  transform: scale(1.2);
 }
 
 .actions-column {
@@ -69,11 +106,11 @@
 }
 
 .action-button.edit {
-  color: var(--info-color);
+  color: #2196f3;
 }
 
 .action-button.delete {
-  color: var(--danger-color);
+  color: #f44336;
 }
 
 .action-button:hover {
@@ -86,12 +123,16 @@
 
 .no-data {
   text-align: center;
-  color: var(--secondary-color);
+  color: #757575;
   padding: 2rem !important;
 }
 
 @media (max-width: 768px) {
   .table-container {
     overflow-x: auto;
+  }
+  
+  .data-table th, .data-table td {
+    padding: 0.75rem 0.5rem;
   }
 }

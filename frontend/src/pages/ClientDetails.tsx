@@ -26,6 +26,17 @@ interface AuthUser {
   organizations?: OrganizationWithRole[];
 }
 
+// Funkcja pomocnicza do formatowania adresu
+const formatAddress = (city?: string, street?: string, houseNumber?: string): string => {
+  if (!city) return '-';
+  
+  if (street) {
+    return `${city}, ul. ${street} ${houseNumber || ''}`.trim();
+  } else {
+    return `${city} ${houseNumber || ''}`.trim();
+  }
+};
+
 const checkAccessToClient = (clientData: Client, currentUser: any): boolean => {
   if (!currentUser || !clientData) {
     console.log('Missing user or client data');
@@ -191,13 +202,13 @@ const ClientDetails: React.FC = () => {
               <h2 className="org-name">{ownedOrg.name}</h2>
               {ownedOrg.city && (
                 <p className="org-address">
-                  {ownedOrg.city}, ul. {ownedOrg.street || ''} {ownedOrg.house_number || ''}
+                  {formatAddress(ownedOrg.city, ownedOrg.street, ownedOrg.house_number)}
                 </p>
               )}
             </div>
           )}
           <p className="client-address">
-            {client.city}, ul. {client.street || ''} {client.house_number || ''}
+            {formatAddress(client.city, client.street, client.house_number)}
           </p>
         </div>
         <div className="client-header-actions">
@@ -269,7 +280,7 @@ const ClientDetails: React.FC = () => {
                   <div className="info-row">
                     <span className="label">Adres:</span>
                     <span className="value">
-                      {org.city}, ul. {org.street || ''} {org.house_number || ''}
+                      {formatAddress(org.city, org.street, org.house_number)}
                     </span>
                   </div>
                 )}

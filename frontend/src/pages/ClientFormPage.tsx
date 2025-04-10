@@ -6,7 +6,7 @@ import Button from '../components/common/Button';
 import ClientForm from '../components/forms/ClientForm';
 import { fetchClientById, createClient, updateClient } from '../api/userApi';
 import { useAuth } from '../context/AuthContext';
-import { Client } from '../types/models';
+import { Client, Organization as BaseOrganization, OrganizationWithRole, Herd } from '../types/models';
 import { AuthContextType } from '../context/auth-types';
 
 // Interfejs dla parametrów URL
@@ -15,11 +15,21 @@ interface ClientFormParams {
   [key: string]: string | undefined;
 }
 
-// Dodaję interfejs dla organizacji, jeśli nie jest zdefiniowany w types/models
-interface Organization {
-  id: number;
-  role: string;
-  [key: string]: any;
+// Rozszerzony interfejs Organization z dodatkowymi polami potrzebnymi w formularzu
+interface ExtendedOrganization extends OrganizationWithRole {
+  tax_id?: string;
+  postal_code?: string;
+}
+
+// Rozszerzony interfejs Herd z dodatkowymi polami
+interface ExtendedHerd extends Herd {
+  name?: string;
+}
+
+// Rozszerzony interfejs Client z pewnymi polami
+interface ExtendedClient extends Client {
+  organizations?: ExtendedOrganization[];
+  herds?: ExtendedHerd[];
 }
 
 const ClientFormPage: React.FC = () => {
@@ -51,8 +61,11 @@ const ClientFormPage: React.FC = () => {
           : undefined;
           
         console.log(`Pobieranie danych klienta ID ${id} dla organizacji ${organizationId}`);  
-        const data = await fetchClientById(Number(id), organizationId);
-        console.log('Otrzymane dane klienta:', data);
+        const fetchedData = await fetchClientById(Number(id), organizationId);
+        console.log('Otrzymane dane klienta:', fetchedData);
+        
+        // Bezpieczne rzutowanie do rozszerzonego typu
+        const data = fetchedData as ExtendedClient;
         
         // Sprawdź uprawnienia do tego klienta
         const hasAccess = checkAccessToClient(data, user);
@@ -64,16 +77,47 @@ const ClientFormPage: React.FC = () => {
           return;
         }
         
-        // Pobierz dane o firmie i gospodarstwie, jeśli dostępne
+        // POPRAWKA: Bardziej dokładne sprawdzenie czy klient ma firmę lub gospodarstwo
+        const hasCompany = Array.isArray(data.organizations) && data.organizations.some(org => {
+          // Sprawdź czy organizacja ma nazwę i rolę inną niż 'client'/'farmer'
+          return org.name && org.role && 
+            !['client', 'farmer'].includes(org.role.toLowerCase());
+        });
+        
+        // POPRAWKA: Sprawdź czy klient ma gospodarstwo na podstawie danych herds
+        const hasFarm = Array.isArray(data.herds) && data.herds.some(herd => {
+          // Sprawdź czy gospodarstwo ma prawidłowy numer stada
+          return herd && herd.herd_id;
+        });
+        
+        // Pobierz dane o firmie i gospodarstwie
         const clientData: Partial<Client> = {
           ...data,
-          // Dane firmy - można by było pobrać z API na backendzie,
-          // ale w tej chwili nie mamy do tego endpointu
-          has_company: !!data.organizations?.find(org => org.role !== 'client'),
-          // Dane gospodarstwa - podobnie jak wyżej
-          has_farm: !!data.herds?.length
+          // Poprawnione wartości flag
+          has_company: hasCompany,
+          has_farm: hasFarm,
         };
         
+        // Jeśli klient ma firmę, pobierz jej dane z pierwszej pasującej organizacji
+        if (hasCompany && Array.isArray(data.organizations) && data.organizations.length > 0) {
+          const org = data.organizations[0];
+          clientData.company_name = org.name || '';
+          clientData.company_tax_id = org.tax_id || '';
+          clientData.company_city = org.city || '';
+          clientData.company_street = org.street || '';
+          clientData.company_house_number = org.house_number || '';
+          clientData.company_postal_code = org.postal_code || '';
+        }
+        
+        // Jeśli klient ma gospodarstwo, pobierz jego dane
+        if (hasFarm && Array.isArray(data.herds) && data.herds.length > 0) {
+          const herd = data.herds[0];
+          clientData.farm_name = herd.name || '';
+          clientData.herd_registration_number = herd.herd_id || '';
+          clientData.herd_evaluation_number = herd.eval_herd_no || '';
+        }
+        
+        console.log('Przygotowane dane klienta do formularza:', clientData);
         setClient(clientData);
       } catch (err: any) {
         console.error('Error fetching client details:', err);
@@ -120,13 +164,13 @@ const ClientFormPage: React.FC = () => {
     }
     
     // Najpierw sprawdź, czy użytkownik ma rolę superadmina w jakiejkolwiek organizacji
-    if (currentUser.organizations.some((org: Organization) => org.role?.toLowerCase() === 'superadmin')) {
+    if (currentUser.organizations.some((org: OrganizationWithRole) => org.role?.toLowerCase() === 'superadmin')) {
       console.log('Dostęp przyznany: Użytkownik jest superadminem');
       return true;
     }
     
     // Potem sprawdź czy użytkownik ma rolę owner/officestaff
-    const userHasAdminRole = currentUser.organizations.some((org: Organization) => 
+    const userHasAdminRole = currentUser.organizations.some((org: OrganizationWithRole) => 
       ['owner', 'officestaff'].includes(org.role?.toLowerCase())
     );
     

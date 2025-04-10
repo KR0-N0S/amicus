@@ -33,5 +33,59 @@ pool.connect(
   }
 );
 
+/**
+ * Wykonuje zapytanie do bazy danych
+ * @param text Zapytanie SQL
+ * @param params Parametry zapytania
+ * @returns Wynik zapytania
+ */
 export const query = (text: string, params?: any[]) => pool.query(text, params);
+
+/**
+ * Wykonuje serię zapytań w ramach jednej transakcji
+ * @param callback Funkcja zawierająca zapytania do wykonania w transakcji
+ * @returns Wynik ostatniego zapytania z transakcji
+ */
+export const withTransaction = async <T>(
+  callback: (client: PoolClient) => Promise<T>
+): Promise<T> => {
+  const client = await pool.connect();
+  
+  try {
+    // Rozpoczęcie transakcji
+    await client.query('BEGIN');
+    
+    // Wykonanie callback z przekazaniem klienta
+    const result = await callback(client);
+    
+    // Potwierdzenie transakcji
+    await client.query('COMMIT');
+    
+    return result;
+  } catch (error) {
+    // W przypadku błędu - wycofanie transakcji
+    await client.query('ROLLBACK');
+    console.error('Transaction rolled back due to error:', error);
+    throw error;
+  } finally {
+    // Zwolnienie klienta z powrotem do puli
+    client.release();
+  }
+};
+
+/**
+ * Wykonuje pojedyncze zapytanie w ramach transakcji
+ * @param client Klient połączenia
+ * @param text Zapytanie SQL
+ * @param params Parametry zapytania
+ * @returns Wynik zapytania
+ */
+export const queryWithinTransaction = (
+  client: PoolClient, 
+  text: string, 
+  params?: any[]
+) => {
+  return client.query(text, params);
+};
+
 export { pool };

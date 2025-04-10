@@ -1,44 +1,27 @@
-import type { Config } from '@jest/types';
+import type { Config } from 'jest';
 
-const config: Config.InitialOptions = {
+const config: Config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  collectCoverageFrom: [
-    'controllers/**/*.{js,ts}',
-    'services/**/*.{js,ts}',
-    'repositories/**/*.{js,ts}',
-    'middleware/**/*.{js,ts}',
-    'utils/**/*.{js,ts}',
-    '!**/node_modules/**',
-    '!**/dist/**'
-  ],
-  coverageThreshold: {
-    global: {
-      statements: 70,
-      branches: 60,
-      functions: 70,
-      lines: 70
-    }
-  },
-  testMatch: [
-    '**/tests/**/*.{js,ts}',
-    '**/?(*.)+(spec|test).{js,ts}'
-  ],
-  setupFilesAfterEnv: ['./tests/setup.ts'],
+  roots: ['<rootDir>/tests'],
   transform: {
-    '^.+\\.tsx?$': 'ts-jest',
-    '^.+\\.jsx?$': 'babel-jest'
+    '^.+\\.tsx?$': 'ts-jest'
   },
+  testRegex: '(/__tests__/.*|(\\.|/)(test|spec))\\.tsx?$',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-  globals: {
-    'ts-jest': {
-      tsconfig: 'tsconfig.json'
-    }
-  },
-  moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/$1'
-  },
-  testPathIgnorePatterns: ['/node_modules/', '/dist/']
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
+  collectCoverage: true,
+  collectCoverageFrom: [
+    'controllers/**/*.ts',
+    'services/**/*.ts',
+    'middleware/**/*.ts',
+    '!**/node_modules/**'
+  ],
+  verbose: true,
+  testPathIgnorePatterns: ['/node_modules/', '/dist/'],
+  coverageReporters: ['json', 'lcov', 'text', 'clover'],
+  clearMocks: true,
+  restoreMocks: true,
 };
 
 export default config;

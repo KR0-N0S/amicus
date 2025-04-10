@@ -16,7 +16,7 @@ import DataList from './pages/DataList';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import NotFound from './pages/NotFound';
-import ClientsList from './pages/ClientsList';
+import ClientsList from './pages/clients/ClientsList';
 import ClientDetails from './pages/ClientDetails';
 import ClientFormPage from './pages/ClientFormPage';
 

@@ -1,0 +1,102 @@
+.custom-tag {
+    margin: 2px;
+    font-size: 0.75rem;
+    height: 24px;
+    border-radius: 12px;
+    font-weight: 500;
+  }
+  
+  .tag-default {
+    background-color: #e2e8f0;
+    color: #334155;
+  }
+  
+  .tag-primary {
+    background-color: var(--primary-color);
+    color: white;
+  }
+  
+  .tag-secondary {
+    background-color: var(--secondary-color);
+    color: white;
+  }
+  
+  .tag-success {
+    background-color: var(--success-color);
+    color: white;
+  }
+  
+  .tag-warning {
+    background-color: var(--warning-color);
+    color: #334155;
+  }
+  
+  .tag-danger {
+    background-color: var(--danger-color);
+    color: white;
+  }
+  
+  .tag-info {
+    background-color: var(--info-color);
+    color: white;
+  }
+  
+  .tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+  }
+  
+  .tag-selector {
+    position: relative;
+  }
+  
+  .tag-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 100;
+    width: 250px;
+    max-height: 300px;
+    overflow-y: auto;
+    background-color: white;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    box-shadow: var(--shadow);
+    padding: 8px;
+  }
+  
+  .tag-menu-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  .tag-menu-list {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  
+  .tag-menu-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-bottom: 2px;
+  }
+  
+  .tag-menu-item:hover {
+    background-color: #f3f4f6;
+  }
+  
+  .tag-color-preview {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+  }

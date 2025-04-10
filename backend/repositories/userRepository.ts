@@ -1,9 +1,8 @@
 import { query } from '../config/db';
 import { QueryResult } from 'pg';
+import { SortOptions } from '../types/common';
 
-/**
- * Interfejs reprezentujący użytkownika
- */
+// Interfejsy reprezentujące użytkownika i inne struktury danych
 export interface User {
   id: number;
   email: string;
@@ -23,9 +22,6 @@ export interface User {
   herds?: Herd[];
 }
 
-/**
- * Interfejs dla danych organizacji z rolą użytkownika
- */
 export interface OrganizationWithRole {
   id: number;
   name: string;
@@ -35,18 +31,12 @@ export interface OrganizationWithRole {
   role: string;
 }
 
-/**
- * Interfejs dla danych stada
- */
 export interface Herd {
   id: number;
   herd_id: string;
   eval_herd_no?: string;
 }
 
-/**
- * Dane potrzebne do utworzenia użytkownika
- */
 export interface UserCreateData {
   email: string;
   password: string;
@@ -60,9 +50,6 @@ export interface UserCreateData {
   tax_id?: string;
 }
 
-/**
- * Dane do aktualizacji użytkownika
- */
 export interface UserUpdateData {
   email?: string;
   first_name?: string;
@@ -75,9 +62,6 @@ export interface UserUpdateData {
   tax_id?: string;
 }
 
-/**
- * Interfejs dla wyników paginacji
- */
 export interface PaginationResult {
   total: number;
   limit: number;
@@ -85,17 +69,11 @@ export interface PaginationResult {
   pages: number;
 }
 
-/**
- * Interfejs dla wyników wyszukiwania użytkowników
- */
 export interface SearchUsersResult {
   users: User[];
   pagination: PaginationResult;
 }
 
-/**
- * Interfejs dla wpisu w cache rozszerzeń
- */
 interface ExtensionCacheEntry {
   value: boolean;
   expires: number;
@@ -130,6 +108,49 @@ async function _checkExtension(extensionName: string): Promise<boolean> {
     _extensionCache[extensionName] = { value: false, expires: now + _extensionCacheDuration };
     return false;
   }
+}
+
+/**
+ * Buduje klauzulę ORDER BY na podstawie opcji sortowania
+ * @param sortOptions Opcje sortowania (kolumna i kierunek)
+ * @returns Klauzula SQL ORDER BY
+ */
+function buildOrderByClause(sortOptions?: SortOptions): string {
+  if (!sortOptions || !sortOptions.column) {
+    return 'u.last_name, u.first_name'; // domyślne sortowanie
+  }
+
+  let orderColumn: string;
+  
+  // Mapowanie specjalnych kolumn na odpowiednie wyrażenia SQL
+  switch(sortOptions.column) {
+    case 'name':
+      // Sortowanie po pełnym imieniu i nazwisku
+      orderColumn = `CONCAT(u.first_name, ' ', u.last_name)`;
+      break;
+    case 'address':
+      // Sortowanie po pełnym adresie
+      orderColumn = `CONCAT(COALESCE(u.city, ''), ' ', COALESCE(u.street, ''), ' ', COALESCE(u.house_number, ''))`;
+      break;
+    case 'organization':
+      // Sortowanie po nazwie organizacji (bierzemy tylko pierwszą)
+      orderColumn = `(SELECT name FROM organizations o JOIN organization_user ou ON o.id = ou.organization_id 
+                    WHERE ou.user_id = u.id LIMIT 1)`;
+      break;
+    default:
+      // Dla bezpieczeństwa weryfikujemy, czy kolumna jest prefixowana
+      if (sortOptions.column.indexOf('.') === -1) {
+        orderColumn = `u.${sortOptions.column}`; // Dodajemy prefix tabeli users
+      } else {
+        orderColumn = sortOptions.column; // Używamy jak jest
+      }
+  }
+  
+  // Sanityzacja kierunku sortowania
+  const direction = sortOptions.direction === 'desc' ? 'DESC' : 'ASC';
+  
+  // Dodajemy domyślne sortowanie jako drugie kryterium dla stabilności wyników
+  return `${orderColumn} ${direction}, u.last_name, u.first_name`;
 }
 
 /**
@@ -234,10 +255,16 @@ async function deactivateUser(userId: number): Promise<User> {
 }
 
 /**
- * Pobiera wszystkich użytkowników
+ * Pobiera wszystkich użytkowników z opcjonalnym sortowaniem
+ * @param sortOptions Opcje sortowania
  * @returns Lista wszystkich użytkowników
  */
-async function getAllUsers(): Promise<User[]> {
+async function getAllUsers(sortOptions?: SortOptions): Promise<User[]> {
+  // Budujemy klauzulę sortowania
+  const orderByClause = buildOrderByClause(sortOptions);
+  
+  console.log(`[USER_REPO] Pobieranie wszystkich użytkowników z sortowaniem: ${orderByClause}`);
+  
   const result: QueryResult = await query(
     `SELECT u.*, 
             array_agg(DISTINCT jsonb_build_object(
@@ -258,7 +285,7 @@ async function getAllUsers(): Promise<User[]> {
      LEFT JOIN organizations o ON ou.organization_id = o.id
      LEFT JOIN herds h ON h.owner_id = u.id
      GROUP BY u.id
-     ORDER BY u.last_name, u.first_name`
+     ORDER BY ${orderByClause}`
   );
   return result.rows;
 }
@@ -266,10 +293,19 @@ async function getAllUsers(): Promise<User[]> {
 /**
  * Pobiera użytkowników należących do konkretnej organizacji
  * @param organizationId - ID organizacji
+ * @param sortOptions - Opcje sortowania (kolumna i kierunek)
  * @returns Lista użytkowników należących do organizacji
  */
-async function getUsersByOrganization(organizationId: number): Promise<User[]> {
+async function getUsersByOrganization(
+  organizationId: number, 
+  sortOptions?: SortOptions
+): Promise<User[]> {
   console.log(`[USER_REPO] Pobieranie użytkowników dla organizacji ${organizationId}`);
+  
+  // Budujemy klauzulę sortowania
+  const orderByClause = buildOrderByClause(sortOptions);
+  
+  console.log(`[USER_REPO] Klauzula sortowania: ORDER BY ${orderByClause}`);
   
   const result: QueryResult = await query(
     `SELECT u.*, 
@@ -292,7 +328,7 @@ async function getUsersByOrganization(organizationId: number): Promise<User[]> {
      LEFT JOIN herds h ON h.owner_id = u.id
      WHERE ou.organization_id = $1
      GROUP BY u.id
-     ORDER BY u.last_name, u.first_name`,
+     ORDER BY ${orderByClause}`,
     [organizationId]
   );
   
@@ -305,13 +341,20 @@ async function getUsersByOrganization(organizationId: number): Promise<User[]> {
  * Pobiera klientów należących do organizacji, z wyłączeniem określonych ról
  * @param organizationId - ID organizacji
  * @param excludedRoles - Role do wykluczenia
+ * @param sortOptions - Opcje sortowania (kolumna i kierunek)
  * @returns Lista klientów
  */
 async function getClientsInOrganization(
   organizationId: number, 
-  excludedRoles: string[] = ['Owner', 'Employee', 'SuperAdmin', 'OfficeStaff', 'Inseminator', 'VetTech', 'Vet']
+  excludedRoles: string[] = ['Owner', 'Employee', 'SuperAdmin', 'OfficeStaff', 'Inseminator', 'VetTech', 'Vet'],
+  sortOptions?: SortOptions
 ): Promise<User[]> {
   const placeholders = excludedRoles.map((_, index) => `$${index + 2}`).join(', ');
+  
+  // Budujemy klauzulę sortowania
+  const orderByClause = buildOrderByClause(sortOptions);
+  
+  console.log(`[USER_REPO] Pobieranie klientów dla organizacji ${organizationId} z sortowaniem: ${orderByClause}`);
   
   const result: QueryResult = await query(
     `SELECT u.*, 
@@ -335,7 +378,7 @@ async function getClientsInOrganization(
      WHERE ou.organization_id = $1
      AND ou.role NOT IN (${placeholders})
      GROUP BY u.id
-     ORDER BY u.last_name, u.first_name`,
+     ORDER BY ${orderByClause}`,
     [organizationId, ...excludedRoles]
   );
   return result.rows;
@@ -382,12 +425,13 @@ async function getSingleUser(userId: number, withDetails: boolean = true): Promi
 }
 
 /**
- * Wyszukuje użytkowników z paginacją
+ * Wyszukuje użytkowników z paginacją i sortowaniem
  * @param searchQuery - Fraza wyszukiwania
  * @param roles - Role użytkowników (opcjonalne)
  * @param organizationId - ID organizacji
  * @param limit - Limit wyników (domyślnie 20)
  * @param offset - Offset dla paginacji
+ * @param sortOptions - Opcje sortowania
  * @returns Wyniki wyszukiwania z paginacją
  */
 async function searchUsers(
@@ -395,7 +439,8 @@ async function searchUsers(
   roles?: string[] | string, 
   organizationId?: number, 
   limit: number | string = 20, 
-  offset: number | string = 0
+  offset: number | string = 0,
+  sortOptions?: SortOptions
 ): Promise<SearchUsersResult> {
   console.log(`[USER_REPO] Wyszukiwanie użytkowników: query=${searchQuery}, roles=${roles}, organizationId=${organizationId}, limit=${limit}, offset=${offset}`);
   
@@ -522,10 +567,14 @@ async function searchUsers(
     const countResult: QueryResult = await query(countQuery, params);
     const totalCount = parseInt(countResult.rows[0]?.total || '0');
     
-    // Dodanie sortowania i paginacji
+    // Dodanie sortowania z uwzględnieniem parametrów
+    const orderByClause = buildOrderByClause(sortOptions);
+    console.log(`[USER_REPO] Klauzula sortowania dla wyszukiwania: ORDER BY ${orderByClause}`);
+    
+    // Dodanie sortowania i paginacji do głównego zapytania
     sqlQuery += `
       GROUP BY u.id
-      ORDER BY u.last_name, u.first_name
+      ORDER BY ${orderByClause}
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
     params.push(limit, offset);

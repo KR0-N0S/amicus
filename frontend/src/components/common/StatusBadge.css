@@ -1,41 +1,80 @@
 .status-badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   padding: 0.35em 0.65em;
-  font-size: 0.75em;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 600;
   line-height: 1;
   text-align: center;
   white-space: nowrap;
   vertical-align: baseline;
   border-radius: 0.25rem;
+  transition: all 0.2s ease-in-out;
 }
 
 .status-badge.primary {
-  background-color: var(--primary-color);
-  color: white;
+  background-color: rgba(var(--primary-color-rgb), 0.15);
+  color: var(--primary-color);
 }
 
 .status-badge.secondary {
-  background-color: var(--secondary-color);
-  color: white;
+  background-color: rgba(var(--secondary-color-rgb), 0.15);
+  color: var(--secondary-color);
 }
 
 .status-badge.success {
-  background-color: var(--success-color);
-  color: white;
+  background-color: rgba(var(--success-color-rgb), 0.15);
+  color: var(--success-color);
 }
 
 .status-badge.danger {
-  background-color: var(--danger-color);
-  color: white;
+  background-color: rgba(var(--danger-color-rgb), 0.15);
+  color: var(--danger-color);
 }
 
 .status-badge.warning {
-  background-color: var(--warning-color);
-  color: #212529;
+  background-color: rgba(var(--warning-color-rgb), 0.15);
+  color: #d97706; /* Ciemniejszy odcień żółtego dla lepszego kontrastu */
 }
 
 .status-badge.info {
+  background-color: rgba(var(--info-color-rgb), 0.15);
+  color: var(--info-color);
+}
+
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.primary .status-dot {
+  background-color: var(--primary-color);
+}
+
+.secondary .status-dot {
+  background-color: var(--secondary-color);
+}
+
+.success .status-dot {
+  background-color: var(--success-color);
+}
+
+.danger .status-dot {
+  background-color: var(--danger-color);
+}
+
+.warning .status-dot {
+  background-color: var(--warning-color);
+}
+
+.info .status-dot {
   background-color: var(--info-color);
-  color: white;
+}
+
+/* Hover effect dla lepszego UX */
+.status-badge:hover {
+  filter: brightness(0.95);
 }
